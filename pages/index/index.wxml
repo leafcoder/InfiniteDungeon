@@ -1,0 +1,407 @@
+<view class="page" style="{{themeStyle}}">
+  <!-- 背景渐变 + 漂浮光斑 -->
+  <view class="bg">
+    <view class="orb orb-1"></view>
+    <view class="orb orb-2"></view>
+    <view class="orb orb-3"></view>
+  </view>
+
+  <view class="hero">
+    <view class="hero-title">无尽地宫</view>
+    <view class="hero-sub-row">
+      <text class="hero-sub">滑动迷宫，带小人走出 100 个迷宫</text>
+      <view class="how-btn" bindtap="onHow">玩法演示</view>
+    </view>
+    <view class="theme-row">
+      <text class="theme-label">皮肤</text>
+      <view class="theme-switch">
+        <view
+          wx:for="{{themeList}}"
+          wx:key="key"
+          class="theme-pill {{theme === item.key ? 'on' : ''}} {{item.locked ? 'locked' : ''}}"
+          data-k="{{item.key}}"
+          bindtap="onTheme"
+        >{{item.locked ? item.price + '✦' : item.label}}</view>
+      </view>
+      <view class="row-spacer"></view>
+      <text class="dust-badge">✦ {{dust}}</text>
+      <view class="supply-btn" bindtap="onSupplyOpen">补给站</view>
+    </view>
+    <view class="continue glass" bindtap="onContinue">
+      <view class="continue-ico">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M8 5 L8 13 Q8 16 11 16 L15 16 Q18 16 18 19 L18 21" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="5" r="2.4" fill="currentColor"/></svg>
+      </view>
+      <text>继续游戏 · 第 {{continueLevel}} 关</text>
+    </view>
+
+    <!-- 每日挑战 / 周挑战 / 成就入口 -->
+    <view class="quick-row three">
+      <view class="quick-card glass" bindtap="onDaily">
+        <view class="quick-icon daily">🗓</view>
+        <view class="quick-meta">
+          <view class="quick-title">每日挑战</view>
+          <view class="quick-sub">{{dailyDone ? '已通关' : '新布局'}}</view>
+        </view>
+        <view class="quick-badge" wx:if="{{dailyStreak > 0}}">🔥{{dailyStreak}}</view>
+      </view>
+      <view class="quick-card glass" bindtap="onWeeklyOpen">
+        <view class="quick-icon weekly">📆</view>
+        <view class="quick-meta">
+          <view class="quick-title">周挑战</view>
+          <view class="quick-sub">{{weeklyDone}}/{{weeklyTotal}} 关</view>
+        </view>
+      </view>
+      <view class="quick-card glass" bindtap="onAchOpen">
+        <view class="quick-icon ach">🏅</view>
+        <view class="quick-meta">
+          <view class="quick-title">成就</view>
+          <view class="quick-sub">{{achUnlocked}}/{{achTotal}}</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 生存模式 / 排行榜 / 挑战码（P10） -->
+    <view class="quick-row two">
+      <view class="quick-card glass" bindtap="onSurvival">
+        <view class="quick-icon survival">♾</view>
+        <view class="quick-meta">
+          <view class="quick-title">生存模式</view>
+          <view class="quick-sub">最佳 {{bestWave}} 波</view>
+        </view>
+      </view>
+      <view class="quick-card glass" bindtap="onRankOpen">
+        <view class="quick-icon rank">🏆</view>
+        <view class="quick-meta">
+          <view class="quick-title">排行榜</view>
+          <view class="quick-sub">本机最佳记录</view>
+        </view>
+      </view>
+    </view>
+    <view class="challenge-entry glass" bindtap="onChallengeOpen">
+      <text class="ce-ico">🎲</text>
+      <text class="ce-txt">挑战码 · 生成词缀关卡，分享好友同关竞速</text>
+    </view>
+  </view>
+
+  <view class="progress-card glass">
+    <view class="progress-row">
+      <text class="progress-label">通关进度</text>
+      <text class="progress-num">{{doneCount}}/{{total}}</text>
+    </view>
+    <view class="progress-track">
+      <view class="progress-fill" style="width:{{percent}}%"></view>
+    </view>
+  </view>
+
+  <!-- 分区 Tab 导航：只渲染 activeZone 当前分区，避免 100 关平铺 -->
+  <view class="zone-nav">
+    <view class="zone-jump" bindtap="onJumpLatest">↓ 最新</view>
+    <scroll-view class="zone-tabs" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
+      <view
+        class="zone-tab {{activeZone === item.key ? 'on' : ''}} {{item.locked ? 'locked' : ''}}"
+        wx:for="{{zones}}"
+        wx:key="key"
+        data-k="{{item.key}}"
+        bindtap="onZoneTab"
+      >
+        <text class="zt-name">{{item.name}}</text>
+        <text class="zt-prog">{{item.done}}/{{item.total}}</text>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="zones">
+    <view
+      class="zone glass"
+      wx:for="{{zones}}"
+      wx:key="key"
+      wx:if="{{item.key === activeZone}}"
+      style="animation-delay:{{item.delay}}ms"
+    >
+      <view class="zone-head">
+        <view class="zone-icon" style="background:{{item.hue}};">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M8 4 L8 12 Q8 15 11 15 L15 15 Q18 15 18 18 L18 21" fill="none" stroke="#16213A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="4" r="2.4" fill="#16213A"/></svg>
+        </view>
+        <view class="zone-meta">
+          <view class="zone-name">{{item.name}}</view>
+          <view class="zone-range">{{item.range}}</view>
+        </view>
+        <view class="zone-prog">
+          <text class="zone-prog-num">{{item.done}}/{{item.total}}</text>
+        </view>
+      </view>
+      <view class="zone-bar">
+        <view class="zone-fill" style="width:{{item.percent}}%;background:{{item.hue}};"></view>
+      </view>
+
+      <view wx:if="{{item.locked}}" class="zone-locked">
+        <view class="lock"></view>
+        <text>通关上一分区后解锁</text>
+      </view>
+      <view wx:else class="grid">
+        <view
+          wx:for="{{item.levels}}"
+          wx:for-item="lv"
+          wx:key="n"
+          class="cell {{lv.locked ? 'locked' : ''}} {{lv.adOpen ? 'ad-open' : ''}} {{lv.done ? 'done' : ''}} {{lv.current ? 'current' : ''}}"
+          style="animation-delay:{{lv.delay}}ms"
+          data-n="{{lv.n}}"
+          bindtap="openLevel"
+        >
+          <block wx:if="{{lv.locked}}">
+            <view class="lock"></view>
+            <view wx:if="{{lv.adOpen}}" class="ad-tag">▶广告</view>
+          </block>
+          <block wx:else>
+            <text class="cell-num">{{lv.n}}</text>
+            <view wx:if="{{lv.perfect}}" class="cell-perfect">全</view>
+            <view wx:if="{{lv.done}}" class="cell-stars">
+              <view class="cstar {{lv.stars >= 1 ? 'on' : ''}}"></view>
+              <view class="cstar {{lv.stars >= 2 ? 'on' : ''}}"></view>
+              <view class="cstar {{lv.stars >= 3 ? 'on' : ''}}"></view>
+            </view>
+          </block>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="btn-reset glass" bindtap="reset">重置进度</view>
+
+  <!-- 成就 / 设置弹层 -->
+  <view class="ach-mask" wx:if="{{achOpen}}" bindtap="onAchClose">
+    <view class="ach-card panel" catchtap="noop">
+      <view class="ach-x" bindtap="onAchClose">✕</view>
+      <view class="ach-title">成就与设置</view>
+
+      <!-- 页签 -->
+      <view class="ach-tabs">
+        <view class="ach-tab {{achTab === 'ach' ? 'on' : ''}}" data-t="ach" bindtap="onAchTab">
+          成就<text class="ach-tab-num">{{achUnlocked}}/{{achTotal}}</text>
+        </view>
+        <view class="ach-tab {{achTab === 'codex' ? 'on' : ''}}" data-t="codex" bindtap="onAchTab">
+          图鉴<text class="ach-tab-num">{{codexUnlocked}}/{{codexList.length}}</text>
+        </view>
+        <view class="ach-tab {{achTab === 'set' ? 'on' : ''}}" data-t="set" bindtap="onAchTab">设置</view>
+      </view>
+
+      <!-- 图鉴页（P2） -->
+      <block wx:if="{{achTab === 'codex'}}">
+        <view class="ach-stat">遭遇怪物、拾取道具、遇见机关即可点亮图鉴。</view>
+        <view class="ach-list">
+          <view class="ach-item {{item.unlocked ? 'on' : ''}}" wx:for="{{codexList}}" wx:key="key">
+            <view class="codex-badge" style="color:{{item.color}};border-color:{{item.unlocked ? item.color : 'rgba(255,255,255,0.2)'}};">{{item.unlocked ? item.glyph : '?'}}</view>
+            <view class="ach-meta">
+              <text class="ach-name">{{item.name}}<text class="codex-group"> · {{item.group}}</text></text>
+              <text class="ach-desc">{{item.desc}}</text>
+            </view>
+          </view>
+        </view>
+      </block>
+
+      <!-- 成就页 -->
+      <block wx:elif="{{achTab === 'ach'}}">
+        <view class="ach-stat">通关 {{stats.clears}} 次 · 全收集 {{stats.perfects}} · 击败 Boss {{stats.bossClears}} · 累计 ✦ {{stats.dustTotal}}</view>
+        <view class="ach-list">
+          <view class="ach-item {{item.unlocked ? 'on' : ''}}" wx:for="{{achList}}" wx:key="id">
+            <view class="ach-badge">{{item.unlocked ? '🏅' : '🔒'}}</view>
+            <view class="ach-meta">
+              <text class="ach-name">{{item.name}}</text>
+              <text class="ach-desc">{{item.desc}}</text>
+            </view>
+          </view>
+        </view>
+      </block>
+
+      <!-- 设置页 -->
+      <block wx:else>
+        <view class="ach-stat">音效与显示偏好，设置即时生效并本地保存。</view>
+        <view class="set-list">
+          <view class="set-item" bindtap="onToggleSetting" data-k="mute">
+            <view class="set-meta">
+              <text class="set-label">音效</text>
+              <text class="set-desc">拾取 / 通关 / 失败提示音</text>
+            </view>
+            <view class="switch {{settings.mute ? 'off' : 'on'}}">{{settings.mute ? '关' : '开'}}</view>
+          </view>
+          <view class="set-item" bindtap="onToggleSetting" data-k="reduceMotion">
+            <view class="set-meta">
+              <text class="set-label">减少动画</text>
+              <text class="set-desc">关闭拖尾与屏幕震动</text>
+            </view>
+            <view class="switch {{settings.reduceMotion ? 'on' : 'off'}}">{{settings.reduceMotion ? '开' : '关'}}</view>
+          </view>
+          <view class="set-item" bindtap="onToggleSetting" data-k="highContrast">
+            <view class="set-meta">
+              <text class="set-label">高对比度</text>
+              <text class="set-desc">主角描边与轨迹提亮</text>
+            </view>
+            <view class="switch {{settings.highContrast ? 'on' : 'off'}}">{{settings.highContrast ? '开' : '关'}}</view>
+          </view>
+        </view>
+      </block>
+
+      <view class="ach-close" bindtap="onAchClose">完成</view>
+    </view>
+  </view>
+
+  <!-- 补给站弹层（强化 / 主动技 双 tab） -->
+  <view class="supply-mask" wx:if="{{supplyOpen}}" bindtap="onSupplyClose">
+    <view class="supply-card panel" catchtap="noop">
+      <view class="ach-x" bindtap="onSupplyClose">✕</view>
+      <view class="supply-title">补给站</view>
+      <view class="supply-sub">用光尘强化道具 / 解锁主动技 · 当前 ✦ {{dust}}</view>
+      <view class="ach-tabs">
+        <view class="ach-tab {{supplyTab === 'up' ? 'on' : ''}}" data-t="up" bindtap="onSupplyTab">道具强化</view>
+        <view class="ach-tab {{supplyTab === 'skill' ? 'on' : ''}}" data-t="skill" bindtap="onSupplyTab">主动技</view>
+      </view>
+      <!-- 强化页 -->
+      <view class="supply-list" wx:if="{{supplyTab === 'up'}}">
+        <view class="supply-item" wx:for="{{supplyList}}" wx:key="key">
+          <view class="si-icon" style="background:{{item.color}}22;color:{{item.color}};border-color:{{item.color}}66;">{{item.glyph}}</view>
+          <view class="si-meta">
+            <text class="si-label">{{item.label}}</text>
+            <text class="si-effect">Lv{{item.lv}} · {{item.effect}}</text>
+          </view>
+          <view
+            class="si-buy {{item.max ? 'max' : ''}} {{item.poor ? 'poor' : ''}}"
+            wx:if="{{!item.max}}"
+            data-k="{{item.key}}"
+            bindtap="onBuyUpgrade"
+          >{{item.cost}}✦</view>
+          <view class="si-buy max" wx:else>已满级</view>
+        </view>
+      </view>
+      <!-- 主动技页 -->
+      <view class="supply-list" wx:if="{{supplyTab === 'skill'}}">
+        <view class="supply-item" wx:for="{{skillList}}" wx:key="key">
+          <view class="si-icon" style="background:{{item.color}}22;color:{{item.color}};border-color:{{item.color}}66;">{{item.glyph}}</view>
+          <view class="si-meta">
+            <text class="si-label">{{item.name}}</text>
+            <text class="si-effect">{{item.desc}} · 每关 {{item.uses}} 次</text>
+          </view>
+          <view class="si-buy max" wx:if="{{item.owned}}">已解锁</view>
+          <view class="si-buy {{item.poor ? 'poor' : ''}}" wx:else data-k="{{item.key}}" bindtap="onBuySkill">{{item.cost}}✦</view>
+        </view>
+      </view>
+      <view class="supply-close" bindtap="onSupplyClose">完成</view>
+    </view>
+  </view>
+
+  <!-- 关卡解锁面板（广告整合 v2） -->
+  <view class="unlock-mask" wx:if="{{unlockOpen}}" bindtap="onUnlockClose">
+    <view class="unlock-card panel" catchtap="noop">
+      <view class="ach-x" bindtap="onUnlockClose">✕</view>
+      <view class="unlock-title">解锁第 {{unlockLevel}} 关</view>
+      <view class="unlock-sub">选择一种方式立即解锁，通关第 {{unlockLevel - 1}} 关也可自动解锁</view>
+      <view class="unlock-btn ad" bindtap="onUnlockAd">
+        <view class="ub-ico">▶</view>
+        <view class="ub-meta">
+          <text class="ub-name">观看广告解锁</text>
+          <text class="ub-desc">完整观看一段广告，免费解锁</text>
+        </view>
+      </view>
+      <view class="unlock-btn dust" bindtap="onUnlockDust">
+        <view class="ub-ico">✦</view>
+        <view class="ub-meta">
+          <text class="ub-name">花费 {{unlockDustCost}} 光尘解锁</text>
+          <text class="ub-desc">不想看广告？用光尘直接解锁</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 周挑战面板（P2） -->
+  <view class="unlock-mask" wx:if="{{weeklyOpen}}" bindtap="onWeeklyClose">
+    <view class="unlock-card panel" catchtap="noop">
+      <view class="ach-x" bindtap="onWeeklyClose">✕</view>
+      <view class="unlock-title">周挑战 · {{weeklyDone}}/{{weeklyTotal}}</view>
+      <view class="unlock-sub">本周词缀已由周种子生成，周一刷新；每关 10✦，全清再得 30✦</view>
+      <view class="weekly-list">
+        <view class="weekly-item {{item.done ? 'done' : ''}}" wx:for="{{weeklyPlan}}" wx:key="idx" data-i="{{item.idx}}" bindtap="onWeeklyPlay">
+          <view class="wi-num">{{item.idx + 1}}</view>
+          <view class="wi-meta">
+            <text class="wi-level">第 {{item.level}} 关</text>
+            <text class="wi-mods"><text wx:for="{{item.mods}}" wx:for-item="mod" wx:key="key">【{{mod.name}}】{{mod.desc}} </text></text>
+          </view>
+          <view class="wi-state">{{item.done ? '✓' : 'GO'}}</view>
+        </view>
+      </view>
+      <view class="supply-close" bindtap="onWeeklyClose">完成</view>
+    </view>
+  </view>
+
+  <!-- 排行榜面板（本机最佳记录） -->
+  <view class="unlock-mask" wx:if="{{rankOpen}}" bindtap="onRankClose">
+    <view class="unlock-card panel" catchtap="noop">
+      <view class="ach-x" bindtap="onRankClose">✕</view>
+      <view class="unlock-title">排行榜 · 本机最佳</view>
+      <view class="unlock-sub">生存模式最佳：撑过 {{bestWave}} 波</view>
+      <view class="weekly-list">
+        <view class="rank-item" wx:for="{{rankList}}" wx:key="lv">
+          <view class="wi-num">{{index + 1}}</view>
+          <view class="wi-meta">
+            <text class="wi-level">第 {{item.lv}} 关</text>
+          </view>
+          <view class="rank-time">
+            <text class="rk-stars">{{item.stars >= 3 ? '★★★' : item.stars >= 2 ? '★★' : '★'}}</text>
+            <text class="rk-time">{{item.time}}s</text>
+          </view>
+        </view>
+        <view wx:if="{{!rankList.length}}" class="unlock-sub" style="text-align:center;padding:20rpx 0;">还没有通关记录，快去闯第一关吧！</view>
+      </view>
+      <view class="supply-close" bindtap="onRankClose">完成</view>
+    </view>
+  </view>
+
+  <!-- 挑战码面板（自定义挑战生成器） -->
+  <view class="unlock-mask" wx:if="{{challengeOpen}}" bindtap="onChallengeClose">
+    <view class="unlock-card panel" catchtap="noop">
+      <view class="ach-x" bindtap="onChallengeClose">✕</view>
+      <view class="unlock-title">挑战码</view>
+      <view class="unlock-sub">生成词缀关卡码，好友输入同一码即可挑战同一布局</view>
+      <view class="ch-row" bindtap="onChTemplate">
+        <text class="ch-label">关卡模板</text>
+        <text class="ch-value">{{chTemplates[chTemplate].name}}（点击切换）</text>
+      </view>
+      <view class="ch-mods">
+        <view
+          class="ch-mod {{chModsOn[item.key] ? 'on' : ''}}"
+          wx:for="{{chMods}}"
+          wx:key="key"
+          data-k="{{item.key}}"
+          bindtap="onChMod"
+        >{{item.name}}</view>
+      </view>
+      <view class="ch-gen" bindtap="onChGen">生成挑战码</view>
+      <view class="ch-code" wx:if="{{chCode}}" bindtap="onChCopy">
+        <text class="ch-code-txt">{{chCode}}</text>
+        <text class="ch-copy">复制</text>
+      </view>
+      <view class="ch-row">
+        <input class="ch-input" placeholder="粘贴好友的挑战码" value="{{chInput}}" bindinput="onChInput" />
+        <view class="ch-paste" bindtap="onChPaste">粘贴</view>
+      </view>
+      <view class="ch-err" wx:if="{{chErr}}">{{chErr}}</view>
+      <view class="ch-play" bindtap="onChPlay">开始挑战</view>
+    </view>
+  </view>
+
+  <!-- DEV 模拟广告层（未配置广告位时展示，流程与真机一致） -->
+  <view class="sim-mask" wx:if="{{simAd}}" catchtap="noop">
+    <view class="sim-x" bindtap="onSimClose">✕</view>
+    <view class="sim-body">
+      <view class="sim-logo">▶</view>
+      <view class="sim-title">模拟广告</view>
+      <view class="sim-sub">{{simDone ? '感谢观看，可领取奖励' : simLeft + 's 后可关闭'}}</view>
+      <view class="sim-bar"><view class="sim-fill" style="width:{{simDone ? 100 : (3 - simLeft) / 3 * 100}}%"></view></view>
+    </view>
+    <view class="sim-claim" wx:if="{{simDone}}" bindtap="onSimClose">关闭并领取奖励</view>
+  </view>
+
+  <!-- 皮肤解锁动效（vanity） -->
+  <view class="skin-fx" wx:if="{{skinFx}}">
+    <view class="skin-fx-ring"></view>
+    <view class="skin-fx-txt">✨ 解锁「{{skinFx}}」皮肤</view>
+  </view>
+</view>

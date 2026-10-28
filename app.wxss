@@ -1,0 +1,159 @@
+/* =========================================================
+   无尽地宫 · 全局设计系统（玻璃拟态 + 克制配色）
+   配色：深靛 → 雾紫 → 雾青 渐变底 + 半透白卡 + 薄荷青强调
+   ========================================================= */
+page {
+  /* —— 配色 Token —— */
+  --bg-1: #13123A;          /* 深靛 */
+  --bg-2: #2A2566;          /* 雾紫 */
+  --bg-3: #0F3A47;          /* 雾青 */
+  --glass: rgba(255, 255, 255, 0.10);
+  --glass-strong: rgba(255, 255, 255, 0.16);
+  --glass-line: rgba(255, 255, 255, 0.16);
+  /* —— 弹层面板（不透明底，保证弹窗内文字可读）—— */
+  --panel: #1C1A4D;        /* 面板底 */
+  --panel-2: #131140;      /* 面板渐变末端 */
+  --panel-line: rgba(255, 255, 255, 0.22);
+  --text: #F3F1FF;
+  --text-sub: rgba(243, 241, 255, 0.78);
+
+  /* —— 字号阶梯（5 档，全局只允许用这几档）——
+     display  40  标题 / 弹层主标题
+     title    32  区块标题 / 分区名
+     body     26  正文 / 按钮文字
+     caption  22  辅助说明 / 副标题
+     numeric  28  数值（等宽数字） */
+  --fs-display: 40rpx;
+  --fs-title: 32rpx;
+  --fs-body: 26rpx;
+  --fs-caption: 22rpx;
+  --fs-numeric: 28rpx;
+  --accent: #6FE3D2;        /* 薄荷青（单一强调色） */
+  --accent-2: #9B8CFF;      /* 雾紫辅助 */
+  --warn: #FFC15E;          /* 小人暖光 */
+  --danger: #FF7A92;        /* 终点珊瑚 */
+  --board: #15132E;         /* 迷宫板底色 */
+  /* 安全区（刘海屏 / 底部指示条），env 不支持时回退 0 */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+
+  background: var(--bg-1);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+view, text, canvas {
+  box-sizing: border-box;
+}
+
+/* —— 背景层：渐变 + 漂浮光斑 —— */
+.bg {
+  position: fixed;
+  left: 0; top: 0; right: 0; bottom: 0;
+  z-index: 0;
+  background: linear-gradient(165deg, var(--bg-1) 0%, var(--bg-2) 48%, var(--bg-3) 100%);
+  overflow: hidden;
+}
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.55;
+  will-change: transform;
+}
+.orb-1 {
+  width: 540rpx; height: 540rpx;
+  left: -140rpx; top: -90rpx;
+  background: radial-gradient(circle at center, rgba(111, 227, 210, 0.55), rgba(111, 227, 210, 0) 70%);
+  animation: drift1 14s ease-in-out infinite;
+}
+.orb-2 {
+  width: 480rpx; height: 480rpx;
+  right: -130rpx; top: 260rpx;
+  background: radial-gradient(circle at center, rgba(155, 140, 255, 0.5), rgba(155, 140, 255, 0) 70%);
+  animation: drift2 18s ease-in-out infinite;
+}
+.orb-3 {
+  width: 620rpx; height: 620rpx;
+  left: 60rpx; bottom: -180rpx;
+  background: radial-gradient(circle at center, rgba(255, 193, 94, 0.30), rgba(255, 193, 94, 0) 70%);
+  animation: drift3 21s ease-in-out infinite;
+}
+@keyframes drift1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40rpx, 50rpx) scale(1.08); }
+}
+@keyframes drift2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-50rpx, 30rpx) scale(1.1); }
+}
+@keyframes drift3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30rpx, -40rpx) scale(1.06); }
+}
+
+/* —— 玻璃工具类 —— */
+.glass {
+  background: var(--glass);
+  border: 1rpx solid var(--glass-line);
+  box-shadow: 0 8rpx 30rpx rgba(8, 6, 30, 0.32), inset 0 1rpx 0 rgba(255, 255, 255, 0.14);
+}
+
+/* —— 弹层面板（不透明实底）——
+   弹窗内容必须完全盖住背后的迷宫/关卡网格，
+   因此弹窗改用实色渐变底 + 高对比描边，而非半透明白。 */
+.panel {
+  background: linear-gradient(168deg, var(--panel) 0%, var(--panel-2) 100%);
+  border: 1rpx solid var(--panel-line);
+  box-shadow:
+    0 24rpx 60rpx rgba(4, 3, 18, 0.62),
+    inset 0 1rpx 0 rgba(255, 255, 255, 0.18);
+}
+/* 实底面板内的条目底色 */
+.panel-item {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1rpx solid var(--glass-line);
+}
+
+/* —— 内容层 —— */
+.page {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+/* —— 触摸目标规范 ——
+   视觉尺寸可小，但热区必须 ≥ 88rpx（≈44px）。
+   做法：保持元素视觉高度不变，用 ::after 透明覆盖层把热区外扩，
+   这样既不破坏栅格对齐，又满足触屏点击精度。 */
+.tap {
+  position: relative;
+}
+.tap::after {
+  content: '';
+  position: absolute;
+  left: -14rpx;
+  right: -14rpx;
+  top: -14rpx;
+  bottom: -14rpx;
+}
+
+/* —— 通用按钮 —— */
+.btn-reset {
+  margin: 28rpx auto 60rpx;
+  width: 320rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  text-align: center;
+  font-size: 26rpx;
+  color: var(--text-sub);
+  border-radius: 38rpx;
+  letter-spacing: 2rpx;
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+.btn-reset:active {
+  transform: scale(0.96);
+  color: var(--text);
+}

@@ -1,0 +1,16 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/game/game"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#13123A",
+    "navigationBarTitleText": "无尽地宫",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#13123A",
+    "backgroundColorTop": "#13123A",
+    "backgroundColorBottom": "#13123A"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

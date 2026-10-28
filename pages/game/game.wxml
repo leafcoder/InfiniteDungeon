@@ -1,0 +1,252 @@
+<view class="game" style="{{themeStyle}}">
+  <!-- 背景渐变 + 漂浮光斑 -->
+  <view class="bg">
+    <view class="orb orb-1"></view>
+    <view class="orb orb-2"></view>
+    <view class="orb orb-3"></view>
+  </view>
+
+  <!-- 加载过渡页（动态效果）：进入 / 重玩关卡时显示，首帧绘制完成后淡出 -->
+  <view class="loading" wx:if="{{loading}}">
+    <view class="load-seal">
+      <view class="load-ring r1"></view>
+      <view class="load-ring r2"></view>
+      <view class="load-ring r3"></view>
+      <view class="load-core"></view>
+      <view class="load-glyph">宫</view>
+    </view>
+    <view class="load-title">无尽地宫</view>
+    <view class="load-tip">{{loadingTip}}</view>
+    <view class="load-bar"><view class="load-fill"></view></view>
+  </view>
+
+  <!-- 顶部信息栏 -->
+  <view class="topbar">
+    <view class="pill text-btn" bindtap="onBack">返回</view>
+    <view class="pill level-tag">{{dailyTag ? '每日挑战' : '第 ' + level + ' 关'}}</view>
+    <view class="pill fog-tag" wx:if="{{fogOn}}">迷雾</view>
+    <view class="pill key-tag {{hasKey ? 'got' : 'lock'}}" wx:if="{{keyOn}}">{{hasKey ? '🔑' : '🔒'}}</view>
+    <view class="pill time">{{timeText}}</view>
+    <view class="pill text-btn" bindtap="onRestart">重玩</view>
+  </view>
+
+  <!-- 迷宫舞台：铺满剩余屏幕 -->
+  <view class="stage">
+    <!-- Boss 限时追逐条（P2）/ 生存模式波次条 -->
+    <view class="boss-bar" wx:if="{{bossOn}}">
+      <view class="boss-timer {{bossDanger ? 'danger' : ''}}">⏱ {{bossTimeText}}</view>
+      <text class="boss-tip">{{bossRage ? 'Boss 狂暴 · 注意红色冲刺预警' : '甩开 Boss，限时抵达终点'}}</text>
+    </view>
+    <view class="boss-bar" wx:if="{{survivalOn}}">
+      <view class="boss-timer">{{waveText}}</view>
+      <text class="boss-tip">生存模式 · 坚持尽可能多的波次</text>
+    </view>
+
+    <!-- 三星目标条（P0：条件公开化） -->
+    <view class="goal-bar" wx:if="{{!bossOn && !survivalOn}}">
+      <text class="goal-txt">★3 目标：≤{{goalTime}}s · ≤{{goalSteps}} 步 · ≤{{goalSwipe}} 滑</text>
+    </view>
+
+    <!-- 周挑战词缀条 -->
+    <view class="goal-bar weekly" wx:if="{{weeklyTag}}">
+      <text class="weekly-tag" wx:for="{{weeklyMods}}" wx:key="key">【{{item.name}}】{{item.desc}}</text>
+    </view>
+
+    <!-- 成就解锁浮层（P3） -->
+    <view class="ach-toast" wx:if="{{achToast}}">
+      <view class="ach-toast-title">成就解锁</view>
+      <view class="ach-toast-item" wx:for="{{achToastNames}}" wx:key="*this">🏅 {{item}}</view>
+    </view>
+
+    <view
+      class="canvas-wrap"
+      bindtouchstart="onTouchStart"
+      bindtouchend="onTouchEnd"
+      catchtouchmove="onTouchMove"
+    >
+      <canvas type="2d" id="maze" class="maze"></canvas>
+      <!-- 危险雷达 mini-map：玩家居中，红点=怪物相对方向，绿点=终点（不拦截触摸） -->
+      <canvas type="2d" id="radar" class="radar"></canvas>
+    </view>
+
+    <!-- 背包：多道具槽位 + 选中态 + 使用 -->
+    <view class="item-bar">
+      <view class="bag-row" wx:if="{{bag.length}}">
+        <view
+          class="bag-slot {{item.sel ? 'sel' : ''}}"
+          wx:for="{{bag}}"
+          wx:key="type"
+          data-i="{{index}}"
+          bindtap="onSelectItem"
+          style="--slot-color:{{item.color}};background:{{item.bg}};border-color:{{item.sel ? item.color : ''}};"
+        >
+          <text class="bag-glyph">{{item.glyph}}</text>
+          <view class="bag-count" wx:if="{{item.count > 1}}">{{item.count}}</view>
+          <view class="bag-sel-ring"></view>
+        </view>
+      </view>
+      <view class="use-btn {{bag.length ? '' : 'off'}}" bindtap="onUseItem" wx:if="{{bag.length}}">
+        {{heldItem === 'shield' ? '装备' : '使用'}}
+      </view>
+      <!-- 主动技按钮（技能树 2.0） -->
+      <view class="skill-row" wx:if="{{skillDash || skillInsight}}">
+        <view class="skill-btn" wx:if="{{skillDash}}" bindtap="onUseSkill" data-k="dash">
+          <text class="skill-glyph">闪</text>
+          <text class="skill-n">×{{skillDashN}}</text>
+        </view>
+        <view class="skill-btn insight" wx:if="{{skillInsight}}" bindtap="onUseSkill" data-k="insight">
+          <text class="skill-glyph">视</text>
+          <text class="skill-n">×{{skillInsightN}}</text>
+        </view>
+      </view>
+      <view class="fx-chips">
+        <view class="fx-chip {{item.type}}" wx:for="{{fxChips}}" wx:key="type">{{item.label}}{{item.sec !== '' ? ' ' + item.sec + 's' : ''}}</view>
+      </view>
+    </view>
+
+    <!-- 底部 HUD：提示 + 滑动引导 -->
+    <view class="hud">
+      <view class="hint {{hint ? 'show' : ''}}">{{hint}}</view>
+      <view class="swipe-tip {{swipeTip ? 'show' : ''}}">
+        <view class="swipe-ico">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 20 L4 11 H9 V4 H15 V11 H20 Z"/></svg>
+        </view>
+        <text>在迷宫上滑动，选择前进方向</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 首次玩法演示 -->
+  <view class="tut-mask" wx:if="{{tutorialOpen}}">
+    <view class="tut-card panel">
+      <view class="tut-skip" bindtap="onTutClose">跳过</view>
+
+      <!-- 步骤 1：自动前进 -->
+      <view class="tut-step" wx:if="{{tutStep === 0}}">
+        <view class="tut-stage">
+          <view class="tut-corridor h"></view>
+          <view class="tut-dot"></view>
+        </view>
+        <view class="tut-title">小人自动前进</view>
+        <view class="tut-desc">进入迷宫后，小人会沿通道一直向前走，无需一直操作。</view>
+      </view>
+
+      <!-- 步骤 2：自动转弯 -->
+      <view class="tut-step" wx:if="{{tutStep === 1}}">
+        <view class="tut-stage">
+          <view class="tut-corridor corner"></view>
+          <view class="tut-dot corner"></view>
+        </view>
+        <view class="tut-title">拐角自动转弯</view>
+        <view class="tut-desc">遇到没有分叉的拐角，小人会自动转弯继续走。</view>
+      </view>
+
+      <!-- 步骤 3：分叉滑动 -->
+      <view class="tut-step" wx:if="{{tutStep === 2}}">
+        <view class="tut-stage">
+          <view class="tut-corridor fork"></view>
+          <view class="tut-dot wait"></view>
+          <view class="tut-arrows">
+            <view class="tut-arrow a1"></view>
+            <view class="tut-arrow a2"></view>
+          </view>
+          <view class="tut-hand"></view>
+        </view>
+        <view class="tut-title">路口滑动选向</view>
+        <view class="tut-desc">遇到分叉路口小人会停下等待，朝目标方向滑动即可；提前滑动也会被记住，不会丢。</view>
+      </view>
+
+      <view class="tut-dots">
+        <view class="tut-dot-nav {{tutStep === 0 ? 'on' : ''}}" bindtap="onTutPrev"></view>
+        <view class="tut-dot-nav {{tutStep === 1 ? 'on' : ''}}" bindtap="onTutNext"></view>
+        <view class="tut-dot-nav {{tutStep === 2 ? 'on' : ''}}" bindtap="onTutNext"></view>
+      </view>
+
+      <view class="tut-start" bindtap="onTutClose">
+        {{tutStep === 2 ? '开始游戏' : '下一步'}}
+      </view>
+    </view>
+  </view>
+
+  <!-- 通关弹层 -->
+  <view class="win-mask" wx:if="{{showWin}}">
+    <view class="win-card panel">
+      <view class="win-badge">
+        <view class="win-star"></view>
+      </view>
+      <view class="win-title">通关成功</view>
+      <view class="win-stars">
+        <view class="wstar {{stars >= 1 ? 'on' : ''}}"></view>
+        <view class="wstar {{stars >= 2 ? 'on' : ''}}"></view>
+        <view class="wstar {{stars >= 3 ? 'on' : ''}}"></view>
+      </view>
+      <view class="win-sub">用时 {{winTime}} <text wx:if="{{isNew}}" class="new">新纪录</text><text wx:if="{{dailyStreak > 0}}" class="streak">🔥 连续 {{dailyStreak}} 天</text><text wx:if="{{weeklyBonus}}" class="streak">周挑战全清 +30✦</text><text class="dust-earn">✦ +{{dustEarn}}</text></view>
+      <!-- 每日挑战双倍光尘（广告点位 2） -->
+      <view class="double-ad" wx:if="{{canDouble}}" bindtap="onDoubleDust">▶ 看广告 · 光尘翻倍</view>
+      <view class="double-ad done" wx:elif="{{doubleClaimed}}">已翻倍 ✓</view>
+      <view class="win-metrics">
+        <view class="metric {{timeOK ? 'ok' : ''}}">
+          <text class="ml">用时</text>
+          <text class="mv">{{mTime}}s</text>
+          <text class="mt">达标 ≤{{goalTime}}s</text>
+        </view>
+        <view class="metric {{stepOK ? 'ok' : ''}}">
+          <text class="ml">步数</text>
+          <text class="mv">{{mSteps}}</text>
+          <text class="mt">达标 ≤{{goalSteps}}（最优 {{bestSteps}}）</text>
+        </view>
+        <view class="metric {{swipeOK ? 'ok' : ''}}">
+          <text class="ml">操作</text>
+          <text class="mv">{{mSwipe}} 次</text>
+          <text class="mt">达标 ≤{{goalSwipe}} 次</text>
+        </view>
+        <view class="metric gem {{perfect ? 'ok' : ''}}">
+          <text class="ml">收集</text>
+          <text class="mv">{{gems}}/{{gemTotal}}</text>
+          <text class="mt">{{perfect ? '全收集 ★' : '光点'}}</text>
+        </view>
+      </view>
+      <!-- 本次路线回放（#62）：缩略轨迹 + 分享图 -->
+      <view class="replay-wrap" wx:if="{{hasReplay}}">
+        <view class="replay-title">本次路线</view>
+        <canvas type="2d" id="replay" class="replay"></canvas>
+        <view class="replay-save" bindtap="onSaveShare">保存分享图</view>
+      </view>
+      <view class="win-btns">
+        <view class="wbtn ghost" bindtap="onBack">选关</view>
+        <view class="wbtn" bindtap="onRestart">重玩</view>
+        <view class="wbtn primary" wx:if="{{level < 100}}" bindtap="onNext">下一关</view>
+        <view class="wbtn primary" wx:else bindtap="onBack">完成</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 失败弹层（含死亡回顾 + 广告复活） -->
+  <view class="win-mask" wx:if="{{showFail}}">
+    <view class="win-card panel fail">
+      <view class="win-badge fail-badge">
+        <view class="fail-cross"></view>
+      </view>
+      <view class="win-title">挑战失败</view>
+      <view class="win-sub">{{failReason}}，再试一次吧</view>
+      <view class="death-review" wx:if="{{failHint}}">📍 {{failMonster ? '被 ' + failMonster + ' 抓住 · ' : ''}}{{failHint}}</view>
+      <view class="revive-btn" wx:if="{{canRevive}}" bindtap="onReviveAd">▶ 看广告 · 原地复活</view>
+      <view class="win-btns">
+        <view class="wbtn ghost" bindtap="onBack">选关</view>
+        <view class="wbtn primary" bindtap="onRestart">重玩</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 剧情章节过场（每 20 关首次进入） -->
+  <view class="tut-mask" wx:if="{{storyOpen}}">
+    <view class="tut-card panel story">
+      <view class="story-art">{{storyData.art}}</view>
+      <view class="story-title">{{storyData.title}}</view>
+      <view class="story-lines">
+        <view class="story-line" wx:for="{{storyData.lines}}" wx:key="*this">{{item}}</view>
+      </view>
+      <view class="tut-start" bindtap="onStoryClose">启程</view>
+    </view>
+  </view>
+</view>
