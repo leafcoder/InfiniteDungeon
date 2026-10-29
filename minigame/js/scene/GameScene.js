@@ -138,6 +138,7 @@ GameScene.prototype.buildCore = function () {
 // 音效（简单包装，缺文件静默）
 GameScene.prototype.snd = function (name) {
   try {
+    if (!storage.getSetting('sound', true)) return
     if (!this._audio) this._audio = {}
     if (!this._audio[name]) {
       const a = wx.createInnerAudioContext()
@@ -145,6 +146,14 @@ GameScene.prototype.snd = function (name) {
       this._audio[name] = a
     }
     this._audio[name].play()
+  } catch (e) {}
+}
+
+// 震动反馈（受设置开关控制）
+GameScene.prototype.vib = function (kind) {
+  try {
+    if (!storage.getSetting('vibration', true)) return
+    wx.vibrateShort({ type: kind || 'light' })
   } catch (e) {}
 }
 
@@ -330,6 +339,7 @@ GameScene.prototype.handleEvent = function (ev) {
       this.whiteFlash = 0.4
       fx.to(this, { whiteFlash: 0 }, 500)
       this.snd('win')
+      this.vib('medium')
       this.onWin(d)
       break
     case 'fail':
@@ -337,6 +347,7 @@ GameScene.prototype.handleEvent = function (ev) {
       this.redFlash = 0.85
       fx.to(this, { redFlash: 0 }, 600)
       this.snd('fail')
+      this.vib('heavy')
       this.onFail(d.reason)
       break
   }
@@ -372,6 +383,15 @@ GameScene.prototype.onWin = function (st) {
       storage.completeLevel(this.level, { time: st.time, steps: st.steps, swipe: st.swipe, stars: stars, gems: st.gems, gemTotal: st.gemTotal })
       storage.recordWin(this.level, st.time)
     }
+    // 连击光尘加成（仅普通关卡计入连击，封顶 +10✦）
+    if (this.mode === 'level') {
+      const combo = storage.incCombo()
+      const comboBonus = Math.min(combo - 1, 5) * 2
+      if (comboBonus > 0) {
+        dustEarn += comboBonus
+        extra.push('连击 x' + combo + ' +' + comboBonus + '✦')
+      }
+    }
     storage.addDust(dustEarn)
   } catch (e) {
     dustEarn = dustEarn || 0
@@ -392,6 +412,7 @@ GameScene.prototype.ghostPathCandidate = function (st) {
 GameScene.prototype.onFail = function (reason) {
   const self = this
   let extra = []
+  storage.resetCombo() // 连击中断
   // 生存模式：阵亡记录最佳波数
   if (this.mode === 'survival') {
     const reached = Math.max(1, this.core.wave || 1)
@@ -705,10 +726,47 @@ GameScene.prototype.drawHud = function (ctx, v, u, W) {
   this.backBtn.draw(ctx)
   if (this.helpBtn) this.helpBtn.draw(ctx)
 
+  // 出口指南针（非生存模式）：指向迷宫出口
+  if (this.mode !== 'survival' && this.core && this.core.maze) this.drawCompass(ctx, v, u, W)
+
   // 技能按钮（已解锁才显示）
   this.drawSkills(ctx, u, W)
   // 背包（3 槽，点按使用）
   this.drawBag(ctx, u)
+}
+
+// 出口指南针：以迷宫出口方向旋转指针（网格坐标与屏幕同向）
+GameScene.prototype.drawCompass = function (ctx, v, u, W) {
+  const m = this.core.maze
+  const ex = m.end
+  const dx = ex.x - this.core.state.x
+  const dy = ex.y - this.core.state.y
+  const ang = Math.atan2(dy, dx)
+  const cx = W - 26 * u
+  const cy = this.hudH + 22 * u
+  const r = 12 * u
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(10,12,32,0.55)'
+  ctx.fill()
+  ctx.lineWidth = 1
+  ctx.strokeStyle = 'rgba(255,216,110,0.55)'
+  ctx.stroke()
+  ctx.translate(cx, cy)
+  ctx.rotate(ang)
+  ctx.beginPath()
+  ctx.moveTo(r - 3 * u, 0)
+  ctx.lineTo(-(r - 4 * u), -4 * u)
+  ctx.lineTo(-(r - 4 * u), 4 * u)
+  ctx.closePath()
+  ctx.fillStyle = '#FFD86E'
+  ctx.fill()
+  ctx.restore()
+  ctx.fillStyle = 'rgba(243,241,255,0.85)'
+  ctx.font = Math.round(8 * u) + 'px sans-serif'
+  ctx.fillText('出口', cx, cy + r + 10 * u)
 }
 
 // 生存模式玩法说明（游戏内随时可查，弹窗期间游戏暂停）

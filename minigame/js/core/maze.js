@@ -825,6 +825,11 @@ function placeItems(level, maze, monsters, seed) {
   for (let k = 0; k < powerCount && idx < open.length; k++, idx++) {
     items.push({ x: open[idx].x, y: open[idx].y, type: types[Math.floor(rng() * types.length)], taken: false });
   }
+  // 瞬移卷轴（L16+ 概率出现）：使用后直接传送至出口前格，踏出即通关
+  if (level >= 16 && idx < open.length && Math.floor(rng() * 4) === 0) {
+    items.push({ x: open[idx].x, y: open[idx].y, type: 'scroll', taken: false });
+    idx++;
+  }
   return { items: items, gemTotal: gemCount, key: keyPos };
 }
 

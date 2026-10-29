@@ -15,7 +15,7 @@ const maze = require('./maze')
 const DIRV = { U: [0, -1], D: [0, 1], L: [-1, 0], R: [1, 0] }
 const OPPD = { U: 'D', D: 'U', L: 'R', R: 'L' }
 const BAG_MAX = 3
-const FX_TYPES = ['cloak', 'freeze', 'dash', 'shield', 'magnet', 'flare', 'decoy', 'hourglass']
+const FX_TYPES = ['cloak', 'freeze', 'dash', 'shield', 'magnet', 'flare', 'decoy', 'hourglass', 'scroll']
 
 function PlayCore(level, opts) {
   opts = opts || {}
@@ -627,10 +627,15 @@ PlayCore.prototype.updateMonsters = function (now) {
               ni = m.pi + m.pdir
               if (ni < 0 || ni >= m.path.length) ni = m.pi
             }
-            m.pi = ni
-            m.x = m.path[ni].x
-            m.y = m.path[ni].y
-            if (m.behavior >= 2) m.shootCd = Math.max(0, m.shootCd - 1)
+            // 变速巡逻：偶发停顿，制造节奏变化（不影响寻路正确性）
+            if (Math.random() < 0.16) {
+              if (m.behavior >= 2) m.shootCd = Math.max(0, m.shootCd - 1)
+            } else {
+              m.pi = ni
+              m.x = m.path[ni].x
+              m.y = m.path[ni].y
+              if (m.behavior >= 2) m.shootCd = Math.max(0, m.shootCd - 1)
+            }
           }
         }
       }
@@ -926,6 +931,34 @@ PlayCore.prototype.useItem = function (idx) {
   const t = slot.type
   if (t === 'hourglass') {
     this.emit('hint', '时光沙漏会在被抓的瞬间自动生效')
+    return
+  }
+  if (t === 'scroll') {
+    // 传送到出口前格：出口为死路，踏出即通关（需先取得钥匙）
+    const ex = this.maze.end
+    const dirs = maze.getOpenDirs(this.maze.grid, ex.x, ex.y)
+    const d = dirs[0] || 'U'
+    const tx = ex.x - DIRV[d][0]
+    const ty = ex.y - DIRV[d][1]
+    this.pathHistory.push({ x: this.state.x, y: this.state.y })
+    this.state.x = tx
+    this.state.y = ty
+    this.state.dir = null
+    this.state.atFork = false
+    this.state.visited = {}
+    this.state.visited[tx + ',' + ty] = true
+    this.portalCd = false
+    this.checkPickup()
+    this.revealAround()
+    this.stepping = true
+    this.lastStepAt = this.now - 999
+    this.pendingDir = d
+    slot.count--
+    if (slot.count <= 0) this.bag.splice(idx, 1)
+    this.bagSel = Math.min(this.bagSel, Math.max(0, this.bag.length - 1))
+    this.emit('useItem', { type: 'scroll' })
+    this.emit('portal', { from: { x: tx, y: ty }, to: { x: ex.x, y: ex.y } })
+    this.emit('hint', '瞬移卷轴！已传送到出口附近')
     return
   }
   if (t === 'shield') {

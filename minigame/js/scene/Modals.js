@@ -76,13 +76,72 @@ function showSkin(sm, onClose) {
     const rows = buildSkinRows(sm, function () { sm.sceneModal(build()) })
     return new Modal(sm, {
       title: '主题皮肤',
-      lines: [L('✦ 光尘 ' + storage.getDust() + ' · 轻点皮肤即可切换或解锁', { c: '#FFC15E', b: true, s: 13 })],
+      lines: [
+        L('✦ 光尘 ' + storage.getDust() + ' · 轻点皮肤即可切换或解锁', { c: '#FFC15E', b: true, s: 13 }),
+        L('已收集 ' + storage.getUnlockedSkins().length + ' / ' + theme.ORDER.length + ' 套皮肤', { c: '#6FE3D2', s: 11.5 })
+      ],
       rows: rows,
       buttons: [{ label: '关闭' }],
       onClose: onClose
     })
   }
   return build()
+}
+
+/* ---------- 设置（音效 / 震动 / 重置进度） ---------- */
+
+function showSettings(sm, onClose) {
+  const build = function () {
+    const sound = storage.getSetting('sound', true)
+    const vib = storage.getSetting('vibration', true)
+    const rows = [
+      {
+        ick: 'bolt', icCol: '#FFD86E',
+        title: '音效', sub: '背景与事件音效',
+        tag: sound ? '开' : '关', tagColor: sound ? '#6FE3D2' : '#9AA0C8',
+        onTap: function () {
+          storage.setSetting('sound', !sound)
+          const on = storage.getSetting('sound', true)
+          sm.toast('音效' + (on ? '已开启' : '已关闭'))
+          sm.sceneModal(build())
+        }
+      },
+      {
+        ick: 'shield', icCol: '#6FE3D2',
+        title: '震动', sub: '关键事件震动反馈',
+        tag: vib ? '开' : '关', tagColor: vib ? '#6FE3D2' : '#9AA0C8',
+        onTap: function () {
+          storage.setSetting('vibration', !vib)
+          const on = storage.getSetting('vibration', true)
+          sm.toast('震动' + (on ? '已开启' : '已关闭'))
+          sm.sceneModal(build())
+        }
+      }
+    ]
+    return new Modal(sm, {
+      title: '设置',
+      lines: [L('调整游戏体验', { c: '#FFC15E', b: true, s: 13 })],
+      rows: rows,
+      buttons: [
+        { label: '重置进度', onTap: function () { sm.sceneModal(confirmReset(sm, build)) } },
+        { label: '关闭' }
+      ],
+      onClose: onClose
+    })
+  }
+  return build()
+}
+
+// 重置进度二次确认（保留广告解锁的关卡）
+function confirmReset(sm, back) {
+  return new Modal(sm, {
+    title: '重置进度？',
+    lines: [L('将清空所有关卡通关记录、皮肤与光尘（广告解锁的关卡保留）。此操作不可撤销。', { s: 12 })],
+    buttons: [
+      { label: '确认重置', primary: true, onTap: function () { storage.resetProgress(); sm.toast('进度已重置'); sm.sceneModal(back()) } },
+      { label: '取消', onTap: function () { sm.sceneModal(back()) } }
+    ]
+  })
 }
 
 function showSupply(sm, onClose) {
@@ -193,7 +252,10 @@ function showAch(sm, onClose) {
   })
   return new Modal(sm, {
     title: '成就图鉴',
-    lines: [L('成就 ' + Object.keys(done).length + '/' + list.length + ' · 达成成就永久点亮', { b: true, c: '#FFC15E', s: 13.5 })],
+    lines: [
+      L('成就 ' + Object.keys(done).length + '/' + list.length + ' · 达成成就永久点亮', { b: true, c: '#FFC15E', s: 13.5 }),
+      L('皮肤收集 ' + storage.getUnlockedSkins().length + '/' + theme.ORDER.length + ' · 光尘解锁更多主题', { c: '#6FE3D2', s: 11.5 })
+    ],
     rows: rows,
     buttons: [{ label: '关闭' }],
     onClose: onClose
@@ -437,6 +499,7 @@ function manualInput(sm, startFn) {
 module.exports = {
   showSupply: showSupply,
   showSkin: showSkin,
+  showSettings: showSettings,
   showAch: showAch,
   showRank: showRank,
   showDaily: showDaily,

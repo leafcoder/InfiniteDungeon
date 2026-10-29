@@ -3,10 +3,10 @@
  * 输入：ctx、PlayCore 实例、视图参数 { bx, by, bw, bh, v(皮肤变量), now }
  * 自适应：cell 尺寸取 min(bw/W, bh/H)，迷宫居中
  */
-const FX_GLYPH = { cloak: '隐', freeze: '冰', dash: '速', shield: '盾', magnet: '磁', flare: '灯', decoy: '饵', hourglass: '沙' }
+const FX_GLYPH = { cloak: '隐', freeze: '冰', dash: '速', shield: '盾', magnet: '磁', flare: '灯', decoy: '饵', hourglass: '沙', scroll: '卷' }
 const FX_COLOR = {
   cloak: '#9B8CFF', freeze: '#5BC8FF', dash: '#FF9F6E', shield: '#6FE3D2',
-  magnet: '#5EE6D8', flare: '#FF6B6B', decoy: '#FF9EC4', hourglass: '#FFD86E'
+  magnet: '#5EE6D8', flare: '#FF6B6B', decoy: '#FF9EC4', hourglass: '#FFD86E', scroll: '#FFC15E'
 }
 
 function computeLayout(core, view) {

@@ -82,24 +82,25 @@ HomeScene.prototype.enter = function () {
   // ---- 顶栏：Logo 与胶囊同行（左侧），图标/光尘行移到胶囊下方（右侧） ----
   this.iconBtns = []
   const TOPY = (this.sm.capB || SAT + 40) + 2 * u   // 胶囊下缘以下
-  const ibD = 30 * u
-  const ibGap = 8 * u
-  // 顶栏圆形图标钮：皮肤 / 挑战码 / 图鉴（皮肤入口提升可见性）
+  const ibD = 28 * u
+  const ibGap = 7 * u
+  // 顶栏圆形图标钮：图鉴 / 挑战码 / 皮肤 / 设置（右→左排列，设置最左）
   ;[
-    { key: 'skin', icon: '🎨' },
+    { key: 'ach', icon: '📖' },
     { key: 'code', icon: '🔑' },
-    { key: 'ach', icon: '📖' }
+    { key: 'skin', icon: '🎨' },
+    { key: 'settings', icon: '⚙️' }
   ].forEach(function (def, i) {
     self.iconBtns.push(new Button({
       x: W - 16 * u - ibD - i * (ibD + ibGap), y: TOPY, w: ibD, h: ibD,
-      label: def.icon, fontSize: Math.round(14 * u), round: true, glass: true,
+      label: def.icon, fontSize: Math.round(13 * u), round: true, glass: true,
       fill: 'rgba(255,255,255,0.10)', fill2: 'rgba(255,255,255,0.05)',
       textColor: '#F3F1FF',
       onTap: function () { self.openEntry(def.key) }
     }))
   })
   // 光尘胶囊（纯展示，与图标同行，位于最左图标钮左侧）
-  this.pillRect = { x: W - 16 * u - ibD - 2 * (ibD + ibGap) - ibGap - 84 * u, y: TOPY + 1 * u, w: 84 * u, h: 28 * u }
+  this.pillRect = { x: W - 16 * u - ibD - (self.iconBtns.length - 1) * (ibD + ibGap) - ibGap - 84 * u, y: TOPY + 1 * u, w: 84 * u, h: 28 * u }
 
   // ---- 底部锚点：Dock → CTA（先算底部，网格高度随之自适应） ----
   const dockY = H - SAB - 12 * u - 56 * u
@@ -231,6 +232,8 @@ HomeScene.prototype.openEntry = function (key) {
     this.modal = Modals.showAch(this.sm, function () { self.modal = null })
   } else if (key === 'skin') {
     this.modal = Modals.showSkin(this.sm, function () { self.modal = null })
+  } else if (key === 'settings') {
+    this.modal = Modals.showSettings(this.sm, function () { self.modal = null })
   } else if (key === 'supply') {
     this.modal = Modals.showSupply(this.sm, function () { self.modal = null })
   } else if (key === 'code') {

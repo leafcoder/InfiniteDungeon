@@ -178,6 +178,20 @@ function resetProgress() {
   saveProgress({ unlocked: 1, completed: {} });
 }
 
+/* ============ 连击（连续通关，失败清零，用于光尘加成） ============ */
+const COMBO_KEY = 'maze_combo_v1'
+function getCombo() {
+  try { return wx.getStorageSync(COMBO_KEY) || 0 } catch (e) { return 0 }
+}
+function incCombo() {
+  const c = getCombo() + 1
+  try { wx.setStorageSync(COMBO_KEY, c) } catch (e) {}
+  return c
+}
+function resetCombo() {
+  try { wx.setStorageSync(COMBO_KEY, 0) } catch (e) {}
+}
+
 /* ============ 设置（P4 无障碍 / 音效） ============ */
 const SET_KEY = 'maze_settings_v1';
 function getSettings() {
@@ -523,6 +537,9 @@ module.exports = {
   getSettings: getSettings,
   getSetting: getSetting,
   setSetting: setSetting,
+  getCombo: getCombo,
+  incCombo: incCombo,
+  resetCombo: resetCombo,
   getStats: getStats,
   saveStats: saveStats,
   achList: achList,
