@@ -131,13 +131,13 @@ HomeScene.prototype.enter = function () {
   // 左右箭头（圆形玻璃钮，垂直居中）
   this.chevL = new Button({
     x: this.hero.x + 8 * u, y: this.hero.y + this.hero.h / 2 - 17 * u, w: 34 * u, h: 34 * u,
-    label: '‹', fontSize: Math.round(22 * u), round: true, glass: true,
+    label: '‹', fontSize: Math.round(22 * u), round: true, glass: true, vMid: true,
     fill: 'rgba(255,255,255,0.10)', fill2: 'rgba(255,255,255,0.04)', textColor: '#F3F1FF',
     onTap: function () { self.switchZone(self.activeZone - 1) }
   })
   this.chevR = new Button({
     x: this.hero.x + this.hero.w - 42 * u, y: this.hero.y + this.hero.h / 2 - 17 * u, w: 34 * u, h: 34 * u,
-    label: '›', fontSize: Math.round(22 * u), round: true, glass: true,
+    label: '›', fontSize: Math.round(22 * u), round: true, glass: true, vMid: true,
     fill: 'rgba(255,255,255,0.10)', fill2: 'rgba(255,255,255,0.04)', textColor: '#F3F1FF',
     onTap: function () { self.switchZone(self.activeZone + 1) }
   })

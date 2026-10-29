@@ -37,6 +37,7 @@ function Button(opts) {
   this.round = !!opts.round                 // 圆形（图标钮）：半径 = min(w,h)/2
   this.radius = opts.radius || 0            // 自定义圆角（0 = 默认公式）
   this.iconSize = opts.iconSize || 0        // 图标字号（与主标签分离时可设）
+  this.vMid = !!opts.vMid                   // 符号字形（‹ › 等）用 middle 基线垂直居中，避免 alphabetic 基线导致的偏上
   this.phase = Math.random() * 6.28         // 光晕呼吸错相
   this.pressed = false
   this.pressT = 0                           // 按压深度 0~1（fx 驱动）
@@ -131,10 +132,12 @@ Button.prototype.draw = function (ctx) {
 
   // 文本
   ctx.textAlign = 'center'
+  if (this.vMid) ctx.textBaseline = 'middle'
   const hasSub = !!this.sub
   ctx.fillStyle = this.textColor
   ctx.font = 'bold ' + Math.round(this.fontSize) + 'px sans-serif'
-  ctx.fillText(this.label, cx, hasSub ? by + this.h * 0.42 : cy + 1)
+  ctx.fillText(this.label, cx, hasSub ? by + this.h * 0.42 : (this.vMid ? cy : cy + 1))
+  if (this.vMid) ctx.textBaseline = 'alphabetic'
   if (hasSub) {
     ctx.globalAlpha = this.alpha * 0.75
     ctx.font = Math.round(Math.max(10, this.fontSize * 0.62)) + 'px sans-serif'
