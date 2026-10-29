@@ -28,6 +28,63 @@ const SKIN_ICON = { classic: 'castle', glow: 'leaf', festival: 'lantern', cosmos
 const SKIN_COL = { classic: '#FFC15E', glow: '#6FE3D2', festival: '#FF7A92', cosmos: '#9B8CFF', abyss: '#40E0FF', sakura: '#FF9ECB' }
 const UPG_COL = { cloak: '#9B8CFF', freeze: '#6FE3D2', dash: '#FF9F6E' }
 
+// 皮肤行卡（补给站与独立皮肤弹窗共用，避免重复逻辑）
+function buildSkinRows(sm, refresh) {
+  const cur = storage.getTheme()
+  const unlocked = storage.getUnlockedSkins()
+  const rows = []
+  for (let i = 0; i < theme.ORDER.length; i++) {
+    const k = theme.ORDER[i]
+    const t = theme.getTheme(k)
+    const has = unlocked.indexOf(k) !== -1
+    const using = cur === k
+    rows.push({
+      ick: SKIN_ICON[k] || 'spark',
+      icCol: SKIN_COL[k] || '#9B8CFF',
+      swatch: [t.vars['--warn'], t.zones[0]],
+      title: t.label,
+      sub: t.desc || (has ? '已拥有' : '光尘解锁'),
+      tag: using ? '使用中' : has ? '点按切换' : t.price + '✦',
+      tagColor: using ? '#FFC15E' : has ? '#6FE3D2' : '#FFD86E',
+      dim: using,
+      onTap: function () {
+        if (using) return
+        if (!has) {
+          // 皮肤购买：光尘足额直接解锁并穿上
+          if (storage.spendDust(t.price)) {
+            storage.unlockSkin(k)
+            storage.setTheme(k)
+            sm.toast('已解锁并切换：' + t.label)
+          } else {
+            sm.toast('光尘不足：需要 ' + t.price + '✦')
+          }
+          refresh()
+          return
+        }
+        storage.setTheme(k)
+        sm.toast('已切换：' + t.label)
+        refresh()
+      }
+    })
+  }
+  return rows
+}
+
+// 独立皮肤弹窗（首页顶栏「皮肤」钮入口，比补给站更醒目）
+function showSkin(sm, onClose) {
+  const build = function () {
+    const rows = buildSkinRows(sm, function () { sm.sceneModal(build()) })
+    return new Modal(sm, {
+      title: '主题皮肤',
+      lines: [L('✦ 光尘 ' + storage.getDust() + ' · 轻点皮肤即可切换或解锁', { c: '#FFC15E', b: true, s: 13 })],
+      rows: rows,
+      buttons: [{ label: '关闭' }],
+      onClose: onClose
+    })
+  }
+  return build()
+}
+
 function showSupply(sm, onClose) {
   const build = function () {
     const rows = []
@@ -80,43 +137,7 @@ function showSupply(sm, onClose) {
     }
 
     rows.push({ header: '—— 皮肤 ——' })
-    const cur = storage.getTheme()
-    const unlocked = storage.getUnlockedSkins()
-    for (let i = 0; i < theme.ORDER.length; i++) {
-      ;(function (k) {
-        const t = theme.getTheme(k)
-        const has = unlocked.indexOf(k) !== -1
-        const using = cur === k
-        rows.push({
-          ick: SKIN_ICON[k] || 'spark',
-          icCol: SKIN_COL[k] || '#9B8CFF',
-          swatch: [t.vars['--warn'], t.zones[0]],
-          title: t.label,
-          sub: t.desc || (has ? '已拥有' : '光尘解锁'),
-          tag: using ? '使用中' : has ? '点按切换' : t.price + '✦',
-          tagColor: using ? '#FFC15E' : has ? '#6FE3D2' : '#FFD86E',
-          dim: using,
-          onTap: function () {
-            if (using) return
-            if (!has) {
-              // 皮肤购买：光尘足额直接解锁并穿上
-              if (storage.spendDust(t.price)) {
-                storage.unlockSkin(k)
-                storage.setTheme(k)
-                sm.toast('已解锁并切换：' + t.label)
-              } else {
-                sm.toast('光尘不足：需要 ' + t.price + '✦')
-              }
-              sm.sceneModal(build())
-              return
-            }
-            storage.setTheme(k)
-            sm.toast('已切换：' + t.label)
-            sm.sceneModal(build())
-          }
-        })
-      })(theme.ORDER[i])
-    }
+    buildSkinRows(sm, function () { sm.sceneModal(build()) }).forEach(function (r) { rows.push(r) })
 
     return new Modal(sm, {
       title: '补给站',
@@ -415,6 +436,7 @@ function manualInput(sm, startFn) {
 
 module.exports = {
   showSupply: showSupply,
+  showSkin: showSkin,
   showAch: showAch,
   showRank: showRank,
   showDaily: showDaily,
