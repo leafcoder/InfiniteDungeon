@@ -59,10 +59,15 @@ GameScene.prototype.enter = function (params) {
   this.view = {
     bx: 8 * u, by: this.hudH,
     bw: W - 16 * u, bh: H - this.hudH - 10 * u,
-    v: theme.getTheme(storage.getTheme()).vars
+    v: theme.getTheme(storage.getTheme()).vars,
+    cellMin: 40 * u, // 恒定可读 cell 下限，迷宫过大时由镜头滚动呈现
+    camX: 0, camY: 0 // 迷宫世界左上像素偏移（镜头）
   }
+  this.cam = { x: 0, y: 0 }   // 当前镜头（含平滑）
+  this._prevVis = null        // 上一帧玩家位置，用于检测瞬移跳变
   this.reviveUsed = false
   this.buildCore()
+  this.snapCamera() // 开局镜头直接对齐玩家，避免开场长平移
   this.overlay = null
   this.backBtn = null
   this.helpBtn = null
@@ -249,6 +254,8 @@ GameScene.prototype.update = function () {
   if (!core) return
   const evs = core.tick(Date.now())
   for (let i = 0; i < evs.length; i++) this.handleEvent(evs[i])
+  // 镜头跟随（边缘触发死区）：玩家走出屏幕中央区域才滚动迷宫
+  this.updateCamera()
   // 幽灵竞速插值
   if (this.ghost) {
     const gt = (Date.now() - this._startTime) / 1000
@@ -260,6 +267,63 @@ GameScene.prototype.update = function () {
     const f = Math.min(1, Math.max(0, (gt - ga.t) / span))
     this.ghostPos = { x: ga.x + (gb.x - ga.x) * f, y: ga.y + (gb.y - ga.y) * f }
   } else this.ghostPos = null
+}
+
+// 镜头：开局/SNAP（直接对齐玩家，避免开场长平移）
+GameScene.prototype.snapCamera = function () {
+  const v = this.view
+  const core = this.core
+  if (!core || !core.maze) return
+  const m = core.maze
+  const cs = Math.max(Math.min(v.bw / m.W, v.bh / m.H), v.cellMin)
+  const mw = cs * m.W, mh = cs * m.H
+  if (mw <= v.bw + 0.5 && mh <= v.bh + 0.5) {
+    this.cam = { x: 0, y: 0 }; v.camX = 0; v.camY = 0
+    return
+  }
+  let tx = core.visual.x * cs - v.bw / 2
+  let ty = core.visual.y * cs - v.bh / 2
+  tx = Math.max(0, Math.min(tx, mw - v.bw))
+  ty = Math.max(0, Math.min(ty, mh - v.bh))
+  this.cam = { x: tx, y: ty }
+  v.camX = tx
+  v.camY = ty
+}
+
+// 镜头：每帧更新（边缘触发死区，平滑跟随；瞬移跳变则直接对齐）
+GameScene.prototype.updateCamera = function () {
+  const v = this.view
+  const core = this.core
+  const m = core.maze
+  const cs = Math.max(Math.min(v.bw / m.W, v.bh / m.H), v.cellMin)
+  const mw = cs * m.W, mh = cs * m.H
+  if (mw <= v.bw + 0.5 && mh <= v.bh + 0.5) {
+    this.cam = { x: 0, y: 0 }; v.camX = 0; v.camY = 0
+    this._prevVis = { x: core.visual.x, y: core.visual.y }
+    return
+  }
+  const px = core.visual.x * cs
+  const py = core.visual.y * cs
+  const sx = v.bx - this.cam.x + px   // 玩家当前屏幕坐标
+  const sy = v.by - this.cam.y + py
+  const viewCx = v.bx + v.bw / 2
+  const viewCy = v.by + v.bh / 2
+  const zone = Math.min(v.bw, v.bh) * 0.22 // 死区半宽：玩家在屏幕中央约 56% 区域自由移动
+  let tx = this.cam.x, ty = this.cam.y
+  if (sx < viewCx - zone) tx = this.cam.x + (sx - (viewCx - zone))
+  else if (sx > viewCx + zone) tx = this.cam.x + (sx - (viewCx + zone))
+  if (sy < viewCy - zone) ty = this.cam.y + (sy - (viewCy - zone))
+  else if (sy > viewCy + zone) ty = this.cam.y + (sy - (viewCy + zone))
+  tx = Math.max(0, Math.min(tx, mw - v.bw))
+  ty = Math.max(0, Math.min(ty, mh - v.bh))
+  // 瞬移卷轴 / 传送门：位置跳变直接对齐，避免一段无意义快进
+  const pv = this._prevVis || core.visual
+  const jump = Math.abs(core.visual.x - pv.x) + Math.abs(core.visual.y - pv.y)
+  if (jump > 1.5) { this.cam.x = tx; this.cam.y = ty }
+  else { this.cam.x += (tx - this.cam.x) * 0.2; this.cam.y += (ty - this.cam.y) * 0.2 }
+  v.camX = this.cam.x
+  v.camY = this.cam.y
+  this._prevVis = { x: core.visual.x, y: core.visual.y }
 }
 
 GameScene.prototype.setHint = function (t) {
@@ -552,20 +616,21 @@ GameScene.prototype.draw = function (ctx) {
 
   // 幽灵竞速
   if (this.ghostPos) {
-    const m = this.core.maze
-    const cw = this.view.bw / m.W
-    const chh = this.view.bh / m.H
+    const L = computeLayout(this.core, this.view)
     ctx.save()
     ctx.globalAlpha = 0.5
     ctx.shadowColor = '#8FB8FF'
     ctx.shadowBlur = 10
     ctx.fillStyle = '#8FB8FF'
     ctx.beginPath()
-    ctx.arc(this.view.bx + (this.ghostPos.x + 0.5) * cw, this.view.by + (this.ghostPos.y + 0.5) * chh, Math.min(cw, chh) * 0.3, 0, Math.PI * 2)
+    ctx.arc(L.ox + (this.ghostPos.x + 0.5) * L.cs, L.oy + (this.ghostPos.y + 0.5) * L.cs, L.cs * 0.3, 0, Math.PI * 2)
     ctx.fill()
     ctx.restore()
   }
   ctx.restore() // 震屏结束（弹层不震）
+
+  // 右下角小地图（镜头滚动后提供全貌与威胁分布）
+  this.drawMinimap(ctx, v, u)
 
   // 危险红晕：最近怪物距离
   const danger = this.dangerLevel()
@@ -884,6 +949,56 @@ GameScene.prototype.drawBag = function (ctx, u) {
     }
     b.draw(ctx)
   }
+}
+
+// 右下角小地图：镜头滚动后提供全貌与威胁分布（出口 / 玩家 / 怪物）
+GameScene.prototype.drawMinimap = function (ctx, v, u) {
+  const core = this.core
+  if (!core || !core.maze) return
+  const m = core.maze
+  const W = this.sm.W, H = this.sm.H
+  const mmS = 86 * u
+  const mmX = W - 12 * u - mmS
+  const mmY = H - 12 * u - mmS
+  ctx.save()
+  // 底板（半透明圆角）
+  roundRect(ctx, mmX, mmY, mmS, mmS, 10 * u)
+  ctx.fillStyle = 'rgba(8,10,26,0.60)'
+  ctx.fill()
+  ctx.lineWidth = 1
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)'
+  ctx.stroke()
+  // 裁剪进圆角
+  ctx.save()
+  roundRect(ctx, mmX, mmY, mmS, mmS, 10 * u)
+  ctx.clip()
+  const sx = mmS / m.W
+  const sy = mmS / m.H
+  // 墙体（淡）
+  ctx.fillStyle = 'rgba(255,255,255,0.10)'
+  for (let y = 0; y < m.H; y++) {
+    for (let x = 0; x < m.W; x++) {
+      if (m.grid[y][x] === 1) ctx.fillRect(mmX + x * sx, mmY + y * sy, Math.ceil(sx), Math.ceil(sy))
+    }
+  }
+  // 出口（有钥匙=绿可出，否则金=锁）
+  ctx.fillStyle = core.hasKey ? '#6EE7A0' : '#FFD86E'
+  ctx.fillRect(mmX + m.end.x * sx - 1, mmY + m.end.y * sy - 1, sx + 2, sy + 2)
+  // 怪物
+  for (let i = 0; i < core.monsters.length; i++) {
+    const mm = core.monsters[i]
+    ctx.fillStyle = mm.isBoss ? '#FF4D63' : (mm.chasing ? '#FF7A8A' : 'rgba(255,120,140,0.85)')
+    ctx.beginPath()
+    ctx.arc(mmX + mm.vx * sx + sx / 2, mmY + mm.vy * sy + sy / 2, Math.max(1.6, sx * 0.6), 0, Math.PI * 2)
+    ctx.fill()
+  }
+  // 玩家（金点）
+  ctx.fillStyle = '#FFC15E'
+  ctx.beginPath()
+  ctx.arc(mmX + core.visual.x * sx + sx / 2, mmY + core.visual.y * sy + sy / 2, Math.max(2.2, sx * 0.75), 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore() // clip
+  ctx.restore()
 }
 
 // 剧情过场面板（UI 2.0：弹性入场 + 卷轴光带 + 立绘浮动）

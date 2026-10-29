@@ -11,11 +11,28 @@ const FX_COLOR = {
 
 function computeLayout(core, view) {
   const m = core.maze
-  const cs = Math.min(view.bw / m.W, view.bh / m.H)
+  // 恒定可读 cell 尺寸下限：迷宫过大时不再无限缩小，超出部分由镜头滚动呈现
+  const minCs = view.cellMin || 40
+  const fitCs = Math.min(view.bw / m.W, view.bh / m.H)
+  const cs = Math.max(fitCs, minCs)
+  const mw = cs * m.W
+  const mh = cs * m.H
+  let ox, oy
+  if (mw <= view.bw + 0.5 && mh <= view.bh + 0.5) {
+    // 整张能放下：居中，镜头归零
+    ox = view.bx + (view.bw - mw) / 2
+    oy = view.by + (view.bh - mh) / 2
+  } else {
+    // 超出可视区：用镜头偏移（camX/camY 为迷宫世界左上像素偏移）
+    ox = view.bx - (view.camX || 0)
+    oy = view.by - (view.camY || 0)
+  }
   return {
     cs: cs,
-    ox: view.bx + (view.bw - cs * m.W) / 2,
-    oy: view.by + (view.bh - cs * m.H) / 2
+    ox: ox,
+    oy: oy,
+    mw: mw,
+    mh: mh
   }
 }
 
@@ -25,6 +42,11 @@ function drawBoard(ctx, core, view) {
   const L = computeLayout(core, view)
   const cs = L.cs
   const now = view.now || 0
+  // 视口裁剪范围（镜头滚动时只绘制屏幕内格子，提升大迷宫性能）
+  const c0x = Math.max(0, Math.floor((view.bx - L.ox) / cs) - 1)
+  const c1x = Math.min(m.W - 1, Math.ceil((view.bx + view.bw - L.ox) / cs) + 1)
+  const c0y = Math.max(0, Math.floor((view.by - L.oy) / cs) - 1)
+  const c1y = Math.min(m.H - 1, Math.ceil((view.by + view.bh - L.oy) / cs) + 1)
   const pulse = 0.5 + 0.5 * Math.sin(now / 300)
   ctx.save()
 
@@ -38,9 +60,9 @@ function drawBoard(ctx, core, view) {
   ctx.fillStyle = bgG
   ctx.fillRect(view.bx, view.by, view.bw, view.bh)
 
-  // 地板 + 墙
-  for (let y = 0; y < m.H; y++) {
-    for (let x = 0; x < m.W; x++) {
+  // 地板 + 墙（视口裁剪）
+  for (let y = c0y; y <= c1y; y++) {
+    for (let x = c0x; x <= c1x; x++) {
       const px = L.ox + x * cs
       const py = L.oy + y * cs
       if (m.grid[y][x] === 1) {
@@ -122,10 +144,11 @@ function drawBoard(ctx, core, view) {
     }
   }
 
-  // 道具（宝石发光 + 呼吸浮动；道具光晕）
+  // 道具（宝石发光 + 呼吸浮动；道具光晕）—— 视口外跳过绘制
   for (let i = 0; i < core.items.length; i++) {
     const it = core.items[i]
     if (it.taken) continue
+    if (it.x < c0x - 2 || it.x > c1x + 2 || it.y < c0y - 2 || it.y > c1y + 2) continue
     // 迷雾中未探索的道具不显示
     if (core.seen && !core.seen[it.y] ) continue
     if (core.seen && !core.seen[it.y][it.x]) continue
@@ -164,9 +187,10 @@ function drawBoard(ctx, core, view) {
     ctx.fillRect(L.ox + b.x * cs - cs * 0.08, L.oy + b.y * cs - cs * 0.08, cs * 0.16, cs * 0.16)
   }
 
-  // 怪物
+  // 怪物（视口外跳过绘制）
   for (let i = 0; i < core.monsters.length; i++) {
     const mm = core.monsters[i]
+    if (mm.vx < c0x - 1 || mm.vx > c1x + 1 || mm.vy < c0y - 1 || mm.vy > c1y + 1) continue
     const mx = L.ox + mm.vx * cs + cs / 2
     const my = L.oy + mm.vy * cs + cs / 2
     ctx.save()
@@ -187,11 +211,11 @@ function drawBoard(ctx, core, view) {
     ctx.restore()
   }
 
-  // 迷雾覆盖（未探索区域压黑，须在实体之后）
+  // 迷雾覆盖（未探索区域压黑，须在实体之后；视口裁剪）
   if (core.seen) {
     ctx.fillStyle = 'rgba(4,5,15,0.93)'
-    for (let y = 0; y < m.H; y++) {
-      for (let x = 0; x < m.W; x++) {
+    for (let y = c0y; y <= c1y; y++) {
+      for (let x = c0x; x <= c1x; x++) {
         if (!core.seen[y][x]) {
           ctx.fillRect(L.ox + x * cs - 0.5, L.oy + y * cs - 0.5, cs + 1, cs + 1)
         }
