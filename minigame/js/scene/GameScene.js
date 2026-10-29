@@ -11,7 +11,7 @@ const challenge = require('../core/challenge')
 const ad = require('../core/ad')
 const PlayCore = require('../core/play')
 const Modal = require('../ui/Modal')
-const { drawBoard, computeLayout } = require('../render/board')
+const { drawBoard, computeLayout, FX_GLYPH, FX_COLOR } = require('../render/board')
 const fx = require('../ui/fx')
 const Background = require('../ui/Background')
 const AdSim = require('../ui/AdSim')
@@ -629,6 +629,10 @@ GameScene.prototype.draw = function (ctx) {
   }
   ctx.restore() // 震屏结束（弹层不震）
 
+  // 棋盘上层的右侧控件（返回/玩法/指南针/技能/背包）：
+  // 必须在 drawBoard 之后绘制，否则会被迷宫地板盖住（背包/技能曾被覆盖导致不可见、不可点）
+  this.drawHudControls(ctx, v, u, W)
+
   // 右下角小地图（镜头滚动后提供全貌与威胁分布）
   this.drawMinimap(ctx, v, u)
 
@@ -767,6 +771,10 @@ GameScene.prototype.drawHud = function (ctx, v, u, W) {
     ctx.fillText(this.hint, 18 * u, sat + 72 * u)
     ctx.globalAlpha = 1
   }
+}
+
+// 棋盘上层右侧控件（在 drawBoard 之后调用，保证可见可点）
+GameScene.prototype.drawHudControls = function (ctx, v, u, W) {
   const self = this
   // 玩法按钮（生存模式）
   if (this.mode === 'survival' && !this.helpBtn) {
@@ -936,19 +944,34 @@ GameScene.prototype.drawBag = function (ctx, u) {
     }
   }
   const bag = this.core.bag
+  // 空背包不绘制：避免 3 个空槽常驻遮挡迷宫；捡到首个道具后槽位自动出现
+  if (bag.length === 0) return
   for (let i = 0; i < 3; i++) {
     const b = this.bagBtns[i]
     if (i < bag.length) {
-      b.label = bag[i].count + '×' + bag[i].type.slice(0, 3)
-      b.fill = 'rgba(255,193,94,0.30)'
-      b.fill2 = 'rgba(255,193,94,0.18)'
+      // 槽位标签用道具字形（隐/冰/速…）+ 数量，底色染道具主题色
+      const col = FX_COLOR[bag[i].type] || '#FFC15E'
+      b.label = (FX_GLYPH[bag[i].type] || '?') + '×' + bag[i].count
+      b.fill = this.hexA2(col, 0.32)
+      b.fill2 = this.hexA2(col, 0.16)
+      b.textColor = col
     } else {
       b.label = '—'
       b.fill = 'rgba(255,255,255,0.10)'
       b.fill2 = 'rgba(255,255,255,0.06)'
+      b.textColor = '#F3F1FF'
     }
     b.draw(ctx)
   }
+}
+
+// hex → rgba 字符串（'#RRGGBB' + alpha）
+GameScene.prototype.hexA2 = function (hex, a) {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16)
+  const g = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')'
 }
 
 // 右下角小地图：镜头滚动后提供全貌与威胁分布（出口 / 玩家 / 怪物）

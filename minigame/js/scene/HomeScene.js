@@ -683,6 +683,7 @@ HomeScene.prototype.drawHero = function (ctx, v) {
 
   // 徽章：状态指示（锁定 / 进行中 / 已通关）—— 右上角状态标，与左侧「第 X–Y 关」文案分离，文字在容器内垂直居中
   ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
   let badgeW, badgeText
   if (locked) {
     // 锁定：明确写出「需通关的最后一关」(zone.start-1)，而非用当前进度误导
@@ -704,7 +705,7 @@ HomeScene.prototype.drawHero = function (ctx, v) {
     ctx.fill()
     ctx.fillStyle = v['--text-sub']
     ctx.font = Math.round(11.5 * u) + 'px sans-serif'
-    ctx.fillText(badgeText, bx + 14 * u, bby + 20 * u)
+    ctx.fillText(badgeText, bx + 14 * u, bby + 15.5 * u)
   } else if (this.unlocked >= zone.start && this.unlocked <= zone.end) {
     ctx.save()
     ctx.shadowColor = zc
@@ -715,15 +716,17 @@ HomeScene.prototype.drawHero = function (ctx, v) {
     ctx.restore()
     ctx.fillStyle = 'rgba(10,12,32,0.9)'
     ctx.font = 'bold ' + Math.round(11.5 * u) + 'px sans-serif'
-    ctx.fillText(badgeText, bx + 14 * u, bby + 20 * u)
+    ctx.fillText(badgeText, bx + 14 * u, bby + 15.5 * u)
   } else {
     ctx.fillStyle = this.hexA(zc, 0.85)
     roundRect(ctx, bx, bby, badgeW, 30 * u, 15 * u)
     ctx.fill()
     ctx.fillStyle = 'rgba(10,12,32,0.9)'
     ctx.font = 'bold ' + Math.round(11.5 * u) + 'px sans-serif'
-    ctx.fillText(badgeText, bx + 14 * u, bby + 20 * u)
+    ctx.fillText(badgeText, bx + 14 * u, bby + 15.5 * u)
   }
+
+  ctx.textBaseline = 'alphabetic'
 
   // 左右箭头
   this.chevL.draw(ctx)
