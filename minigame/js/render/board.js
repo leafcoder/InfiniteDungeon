@@ -255,15 +255,16 @@ function drawBoard(ctx, core, view) {
 const DIRA = { U: [0, -1], D: [0, 1], L: [-1, 0], R: [1, 0] }
 
 /* ---------- 玩家小人：chibi 造型 + 四向行走动画 + 手持火把 ---------- */
-const WALKER_SKIN = '#FFE3C4'
-const WALKER_HAIR = '#453863'
-const WALKER_TUNIC = '#FFC15E'
-const WALKER_TUNIC2 = '#D98F35'
-const WALKER_PANTS = '#4E4370'
-const WALKER_BOOT = '#2E2850'
-const WALKER_EYE = '#2E2850'
+// 英雄皮肤调色板：view.heroPal 优先（storage.getHeroPal 传入），缺省回退金衫旅人
+const HERO_DEFAULT = {
+  skin: '#FFE3C4', hair: '#453863', tunic: '#FFC15E', tunic2: '#D98F35',
+  pants: '#4E4370', boot: '#2E2850', eye: '#2E2850',
+  glow: 'rgba(255,193,94,0.55)',
+  flame: ['255,240,170', '255,180,70', '255,120,40']
+}
 
 function drawWalker(ctx, core, view, x, y, cs, now) {
+  const P = view.heroPal || HERO_DEFAULT
   const st = core.state || {}
   // 朝向：state.dir 为空（停下）时沿用上次朝向（挂在 view 上跨帧持久）
   if (st.dir) view.lastDir = st.dir
@@ -295,7 +296,7 @@ function drawWalker(ctx, core, view, x, y, cs, now) {
   // ---- 腿（摆动 + 踏步抬起） ----
   ctx.lineCap = 'round'
   ctx.lineWidth = cs * 0.085
-  ctx.strokeStyle = WALKER_PANTS
+  ctx.strokeStyle = P.pants
   for (let side = -1; side <= 1; side += 2) {
     const sw = swing * side
     let fx = side * cs * 0.075
@@ -310,7 +311,7 @@ function drawWalker(ctx, core, view, x, y, cs, now) {
     ctx.moveTo(side * cs * 0.06, cs * 0.10)
     ctx.lineTo(fx, fy)
     ctx.stroke()
-    ctx.fillStyle = WALKER_BOOT
+    ctx.fillStyle = P.boot
     ctx.beginPath()
     ctx.arc(fx, fy, cs * 0.05, 0, Math.PI * 2)
     ctx.fill()
@@ -335,13 +336,13 @@ function drawWalker(ctx, core, view, x, y, cs, now) {
       hx = ax + dx * cs * 0.05 + torchSide * cs * 0.02
       hy = -cs * 0.06
     }
-    ctx.strokeStyle = isTorch ? WALKER_TUNIC : WALKER_TUNIC2
+    ctx.strokeStyle = isTorch ? P.tunic : P.tunic2
     ctx.beginPath()
     ctx.moveTo(ax, ay)
     ctx.lineTo(hx, hy)
     ctx.stroke()
     // 手
-    ctx.fillStyle = WALKER_SKIN
+    ctx.fillStyle = P.skin
     ctx.beginPath()
     ctx.arc(hx, hy, cs * 0.045, 0, Math.PI * 2)
     ctx.fill()
@@ -357,9 +358,9 @@ function drawWalker(ctx, core, view, x, y, cs, now) {
       ctx.stroke()
       const fr = cs * (0.055 + 0.014 * Math.sin(now / 90) + 0.008 * Math.sin(now / 37))
       const fg = ctx.createRadialGradient(tx, ty, 0, tx, ty, fr * 2.2)
-      fg.addColorStop(0, 'rgba(255,240,170,0.95)')
-      fg.addColorStop(0.4, 'rgba(255,180,70,0.75)')
-      fg.addColorStop(1, 'rgba(255,120,40,0)')
+      fg.addColorStop(0, 'rgba(' + P.flame[0] + ',0.95)')
+      fg.addColorStop(0.4, 'rgba(' + P.flame[1] + ',0.75)')
+      fg.addColorStop(1, 'rgba(' + P.flame[2] + ',0)')
       ctx.fillStyle = fg
       ctx.beginPath()
       ctx.arc(tx, ty, fr * 2.2, 0, Math.PI * 2)
@@ -372,45 +373,45 @@ function drawWalker(ctx, core, view, x, y, cs, now) {
   }
 
   // 躯干（金衫）
-  ctx.fillStyle = WALKER_TUNIC
+  ctx.fillStyle = P.tunic
   ctx.save()
-  ctx.shadowColor = 'rgba(255,193,94,0.55)'
+  ctx.shadowColor = P.glow
   ctx.shadowBlur = 8
   roundRectPath(ctx, -cs * 0.13, -cs * 0.085, cs * 0.26, cs * 0.20, cs * 0.075)
   ctx.fill()
   ctx.restore()
   // 腰带
-  ctx.fillStyle = WALKER_TUNIC2
+  ctx.fillStyle = P.tunic2
   ctx.fillRect(-cs * 0.115, cs * 0.055, cs * 0.23, cs * 0.032)
 
   // 头
   const hcx = dx * cs * 0.015
   const hcy = -cs * 0.215
   const hr = cs * 0.125
-  ctx.fillStyle = WALKER_SKIN
+  ctx.fillStyle = P.skin
   ctx.beginPath()
   ctx.arc(hcx, hcy, hr, 0, Math.PI * 2)
   ctx.fill()
   if (back) {
     // 背影：头发盖住整个后脑
-    ctx.fillStyle = WALKER_HAIR
+    ctx.fillStyle = P.hair
     ctx.beginPath()
     ctx.arc(hcx, hcy, hr, 0, Math.PI * 2)
     ctx.fill()
-    ctx.fillStyle = WALKER_SKIN
+    ctx.fillStyle = P.skin
     ctx.beginPath()
     ctx.arc(hcx - hr * 0.85, hcy + hr * 0.1, hr * 0.16, 0, Math.PI * 2)
     ctx.arc(hcx + hr * 0.85, hcy + hr * 0.1, hr * 0.16, 0, Math.PI * 2)
     ctx.fill()
   } else {
     // 头发（上半 + 侧刘海）
-    ctx.fillStyle = WALKER_HAIR
+    ctx.fillStyle = P.hair
     ctx.beginPath()
     ctx.arc(hcx, hcy - hr * 0.08, hr, Math.PI, Math.PI * 2)
     ctx.fill()
     ctx.fillRect(hcx - hr, hcy - hr * 0.14, hr * 2, hr * 0.22)
     // 眼睛（看向移动方向）
-    ctx.fillStyle = WALKER_EYE
+    ctx.fillStyle = P.eye
     const exo = dx * hr * 0.28
     ctx.beginPath()
     ctx.arc(hcx - hr * 0.36 + exo, hcy + hr * 0.18, hr * 0.14, 0, Math.PI * 2)

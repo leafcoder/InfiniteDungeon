@@ -61,7 +61,8 @@ GameScene.prototype.enter = function (params) {
     bw: W - 16 * u, bh: H - this.hudH - 10 * u,
     v: theme.getTheme(storage.getTheme()).vars,
     cellMin: 40 * u, // 恒定可读 cell 下限，迷宫过大时由镜头滚动呈现
-    camX: 0, camY: 0 // 迷宫世界左上像素偏移（镜头）
+    camX: 0, camY: 0, // 迷宫世界左上像素偏移（镜头）
+    heroPal: storage.getHeroPal() // 英雄皮肤调色板（drawWalker 渲染）
   }
   this.cam = { x: 0, y: 0 }   // 当前镜头（含平滑）
   this._prevVis = null        // 上一帧玩家位置，用于检测瞬移跳变

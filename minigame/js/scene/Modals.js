@@ -106,16 +106,108 @@ function adUnlockSkin(sm, k, t, reopen) {
   })
 }
 
+// 英雄行卡（皮肤弹窗与补给站共用）：条件达成即解锁，广告/光尘走手动路径
+function buildHeroRows(sm, refresh) {
+  const cur = storage.getHero()
+  const stats = storage.heroStats()
+  return storage.HEROES.map(function (h) {
+    const avail = storage.heroAvailable(h.id)
+    const using = cur === h.id
+    let tag = ''
+    let tagColor = '#FFD86E'
+    if (using) { tag = '使用中'; tagColor = '#FFC15E' }
+    else if (avail) { tag = '点按切换'; tagColor = '#6FE3D2' }
+    else if (h.by === 'stars') tag = '⭐ ' + h.need
+    else if (h.by === 'clears') tag = '通关 ' + h.need
+    else if (h.by === 'ad') tag = '看广告'
+    else tag = h.price + '✦'
+    // 未达成条件时副标题附带当前进度，让"还差多少"一眼可见
+    let sub = h.desc
+    if (!avail && h.by === 'stars') sub += '（当前 ' + stats.stars + ' 星）'
+    if (!avail && h.by === 'clears') sub += '（当前 ' + stats.clears + ' 关）'
+    return {
+      ick: h.ick,
+      icCol: h.pal.tunic,
+      swatch: [h.pal.tunic, h.pal.tunic2],
+      title: h.name,
+      sub: sub,
+      tag: tag,
+      tagColor: tagColor,
+      dim: using,
+      onTap: function (m) {
+        if (using) return
+        if (avail) {
+          storage.setHero(h.id)
+          sm.toast('已换上：' + h.name)
+          refresh(m)
+          return
+        }
+        if (h.by === 'stars' || h.by === 'clears') {
+          const cur2 = storage.heroStats()
+          const lack = h.need - (h.by === 'stars' ? cur2.stars : cur2.clears)
+          sm.toast(h.by === 'stars' ? '还差 ' + lack + ' 颗星解锁' : '还差 ' + lack + ' 关通关解锁')
+          return
+        }
+        if (h.by === 'dust') {
+          if (storage.buyHero(h.id)) {
+            sm.toast('已解锁并换上：' + h.name)
+            refresh(m)
+          } else {
+            sm.sceneModal(adUnlockHero(sm, h, function () { refresh(null) }))
+          }
+          return
+        }
+        // ad：看广告免费解锁确认页
+        sm.sceneModal(adUnlockHero(sm, h, function () { refresh(null) }))
+      }
+    }
+  })
+}
+
+// 看广告解锁英雄确认页（ad 类直接入口；dust 类光尘不足时的免费替代路径）
+function adUnlockHero(sm, h, reopen) {
+  const finish = function (ok) {
+    if (!ok) { sm.toast('广告未看完，未能解锁'); reopen(); return }
+    storage.unlockHero(h.id)
+    storage.setHero(h.id)
+    sm.toast('广告解锁成功：' + h.name)
+    reopen()
+  }
+  const priceTip = h.by === 'dust' ? '（' + h.price + '✦）' : ''
+  return new Modal(sm, {
+    title: '解锁英雄「' + h.name + '」' + priceTip,
+    lines: [
+      L('观看一段广告即可免费解锁该英雄，解锁后立即换上。', { s: 12.5 }),
+      L(''),
+      L('造型与主题皮肤相互独立，随时可在皮肤弹窗中切换。', { s: 11, c: '#9AA0C8' })
+    ],
+    buttons: [
+      {
+        label: '▶ 看广告解锁', primary: true,
+        onTap: function () {
+          const handled = ad.showRewarded(finish)
+          if (!handled) sm.sceneAd(new AdSim(sm, finish, '解锁英雄：' + h.name))
+        }
+      },
+      { label: '取消', onTap: reopen }
+    ],
+    onClose: reopen
+  })
+}
+
 // 独立皮肤弹窗（首页顶栏「皮肤」钮入口，比补给站更醒目）
 function showSkin(sm, onClose) {
   const makeOpts = function () {
+    const rows = buildSkinRows(sm, apply)
+    rows.push({ header: '—— 英雄 ——' })
+    buildHeroRows(sm, apply).forEach(function (r) { rows.push(r) })
     return {
       title: '主题皮肤',
       lines: [
-        L('✦ 光尘 ' + storage.getDust() + ' · 轻点皮肤即可切换或解锁', { c: '#FFC15E', b: true, s: 13 }),
-        L('已收集 ' + storage.getUnlockedSkins().length + ' / ' + theme.ORDER.length + ' 套皮肤', { c: '#6FE3D2', s: 11.5 })
+        L('✦ 光尘 ' + storage.getDust() + ' · 轻点即可切换或解锁', { c: '#FFC15E', b: true, s: 13 }),
+        L('皮肤 ' + storage.getUnlockedSkins().length + '/' + theme.ORDER.length + ' · 英雄 ' + storage.getHeroCollected() + '/' + storage.HEROES.length, { c: '#6FE3D2', s: 11.5 })
       ],
-      rows: buildSkinRows(sm, apply),
+      rows: rows,
       buttons: [{ label: '关闭' }],
       onClose: onClose
     }
@@ -243,6 +335,9 @@ function showSupply(sm, onClose) {
 
     rows.push({ header: '—— 皮肤 ——' })
     buildSkinRows(sm, apply).forEach(function (r) { rows.push(r) })
+
+    rows.push({ header: '—— 英雄 ——' })
+    buildHeroRows(sm, apply).forEach(function (r) { rows.push(r) })
 
     return {
       title: '补给站',

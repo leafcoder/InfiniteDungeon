@@ -86,6 +86,146 @@ function unlockSkin(k) {
   return s;
 }
 
+/* ============ 英雄皮肤（小人造型） ============ */
+// 解锁路径分层：free 初始 / clears 累计通关 / stars 累计星级 / ad 看广告 / dust 光尘购买（稀有款更贵）
+const HERO_KEY = 'maze_hero_v1';       // 当前穿戴
+const HEROES_KEY = 'maze_heroes_v1';   // 手动解锁记录（广告 / 光尘）
+const HEROES = [
+  {
+    id: 'rover', name: '金衫旅人', desc: '初始造型 · 荒野徒步者', by: 'free', ick: 'bolt',
+    pal: { skin: '#FFE3C4', hair: '#453863', tunic: '#FFC15E', tunic2: '#D98F35', pants: '#4E4370', boot: '#2E2850', eye: '#2E2850', flame: ['255,240,170', '255,180,70', '255,120,40'] }
+  },
+  {
+    id: 'mint', name: '薄荷信使', desc: '累计通关 5 关解锁', by: 'clears', need: 5, ick: 'leaf',
+    pal: { skin: '#FFE3C4', hair: '#2E5E50', tunic: '#6FE3D2', tunic2: '#3AA896', pants: '#27423C', boot: '#1C2E2A', eye: '#1C2E2A', flame: ['220,255,245', '140,240,215', '80,200,170'] }
+  },
+  {
+    id: 'sunset', name: '落霞行者', desc: '累计 20 颗星解锁', by: 'stars', need: 20, ick: 'spark',
+    pal: { skin: '#FFD9B8', hair: '#6B3550', tunic: '#FF9F6E', tunic2: '#D96C45', pants: '#4A2E44', boot: '#33202E', eye: '#33202E', flame: ['255,235,190', '255,170,90', '230,110,50'] }
+  },
+  {
+    id: 'abyssal', name: '渊行者', desc: '累计 45 颗星解锁', by: 'stars', need: 45, ick: 'wave',
+    pal: { skin: '#D8E8EC', hair: '#123040', tunic: '#40E0FF', tunic2: '#2B9EB8', pants: '#14323E', boot: '#0C2028', eye: '#0C2028', flame: ['220,250,255', '130,230,250', '60,180,220'] }
+  },
+  {
+    id: 'sakura', name: '樱吹雪', desc: '看广告解锁', by: 'ad', ick: 'flower',
+    pal: { skin: '#FFE3C4', hair: '#8A4A6B', tunic: '#FF9ECB', tunic2: '#D9689F', pants: '#5C3244', boot: '#3E2130', eye: '#3E2130', flame: ['255,240,248', '255,190,220', '240,130,180'] }
+  },
+  {
+    id: 'lava', name: '熔核骑士', desc: '累计通关 30 关解锁', by: 'clears', need: 30, ick: 'sword',
+    pal: { skin: '#F2C8A8', hair: '#3A1E18', tunic: '#FF6B4A', tunic2: '#C23E28', pants: '#40201A', boot: '#26120E', eye: '#26120E', flame: ['255,245,200', '255,150,60', '220,70,30'] }
+  },
+  {
+    id: 'royal', name: '星海贵胄', desc: '光尘购买 · 稀有', by: 'dust', price: 320, ick: 'crown',
+    pal: { skin: '#FFEAD8', hair: '#E8E4FF', tunic: '#C79BFF', tunic2: '#8F6BD9', pants: '#3A2E5C', boot: '#241C3E', eye: '#241C3E', flame: ['255,250,230', '255,220,140', '240,180,80'] }
+  }
+];
+
+// 累计星级 / 通关数（英雄解锁条件的数据源）
+function heroStats() {
+  const p = getProgress();
+  let stars = 0;
+  let clears = 0;
+  for (const lv in p.completed) {
+    clears++;
+    stars += (p.completed[lv] && p.completed[lv].stars) || 0;
+  }
+  return { stars: stars, clears: clears };
+}
+
+// 手动解锁记录（广告 / 光尘路径）
+function getUnlockedHeroes() {
+  try {
+    const s = wx.getStorageSync(HEROES_KEY);
+    if (Array.isArray(s)) return s;
+  } catch (e) {}
+  return [];
+}
+
+function unlockHero(id) {
+  const s = getUnlockedHeroes();
+  if (s.indexOf(id) === -1) s.push(id);
+  try {
+    wx.setStorageSync(HEROES_KEY, s);
+  } catch (e) {}
+  return s;
+}
+
+// 是否可用：free 恒真；stars/clears 条件达标即解锁（无需手动领取）；ad/dust 需在手动解锁记录里
+function heroAvailable(id) {
+  for (let i = 0; i < HEROES.length; i++) {
+    const h = HEROES[i];
+    if (h.id !== id) continue;
+    if (h.by === 'free') return true;
+    if (h.by === 'ad' || h.by === 'dust') return getUnlockedHeroes().indexOf(id) !== -1;
+    const st = heroStats();
+    return h.by === 'stars' ? st.stars >= h.need : st.clears >= h.need;
+  }
+  return false;
+}
+
+function getHero() {
+  let cur = 'rover';
+  try {
+    const v = wx.getStorageSync(HERO_KEY);
+    if (typeof v === 'string') cur = v;
+  } catch (e) {}
+  // 进度被重置等情况下条件可能失效，回退到初始造型
+  return heroAvailable(cur) ? cur : 'rover';
+}
+
+function setHero(id) {
+  if (!heroAvailable(id)) return false;
+  try {
+    wx.setStorageSync(HERO_KEY, id);
+  } catch (e) {}
+  return true;
+}
+
+// 光尘购买英雄：扣费 + 记录，成功后立即穿戴
+function buyHero(id) {
+  for (let i = 0; i < HEROES.length; i++) {
+    const h = HEROES[i];
+    if (h.id !== id || h.by !== 'dust') continue;
+    if (heroAvailable(id)) return true;
+    if (!spendDust(h.price)) return false;
+    unlockHero(id);
+    setHero(id);
+    return true;
+  }
+  return false;
+}
+
+function hexToRgbStr(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return { r: r, g: g, b: b };
+}
+
+// 当前英雄的渲染调色板（含躯干光晕 rgba 与火焰三段 rgb 串），供 board.drawWalker 使用
+function getHeroPal() {  const cur = getHero();
+  for (let i = 0; i < HEROES.length; i++) {
+    if (HEROES[i].id !== cur) continue;
+    const pal = {};
+    const src = HEROES[i].pal;
+    for (const k in src) pal[k] = src[k];
+    const c = hexToRgbStr(src.tunic);
+    pal.glow = 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',0.55)';
+    return pal;
+  }
+  return null; // board.js 回退默认配色
+}
+
+// 已收集英雄数（条件型达标即算收集，供弹窗收集度展示）
+function getHeroCollected() {
+  let n = 0;
+  for (let i = 0; i < HEROES.length; i++) {
+    if (heroAvailable(HEROES[i].id)) n++;
+  }
+  return n;
+}
+
 // 道具强化等级 {cloak,freeze,dash}，上限 3
 function getUpgrades() {
   try {
@@ -531,6 +671,16 @@ module.exports = {
   spendDust: spendDust,
   getUnlockedSkins: getUnlockedSkins,
   unlockSkin: unlockSkin,
+  HEROES: HEROES,
+  heroStats: heroStats,
+  getUnlockedHeroes: getUnlockedHeroes,
+  unlockHero: unlockHero,
+  heroAvailable: heroAvailable,
+  getHero: getHero,
+  setHero: setHero,
+  buyHero: buyHero,
+  getHeroPal: getHeroPal,
+  getHeroCollected: getHeroCollected,
   getUpgrades: getUpgrades,
   buyUpgrade: buyUpgrade,
   fxDuration: fxDuration,
