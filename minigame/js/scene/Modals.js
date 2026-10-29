@@ -12,7 +12,9 @@ const storage = require('../core/storage')
 const theme = require('../core/theme')
 const weekly = require('../core/weekly')
 const challenge = require('../core/challenge')
+const ad = require('../core/ad')
 const Modal = require('../ui/Modal')
+const AdSim = require('../ui/AdSim')
 
 const UPG_FX = { cloak: '隐身衣', freeze: '冰冻星', dash: '加速鞋' } // 可升级道具（与 storage.getUpgrades 同源）
 
@@ -29,6 +31,8 @@ const SKIN_COL = { classic: '#FFC15E', glow: '#6FE3D2', festival: '#FF7A92', cos
 const UPG_COL = { cloak: '#9B8CFF', freeze: '#6FE3D2', dash: '#FF9F6E' }
 
 // 皮肤行卡（补给站与独立皮肤弹窗共用，避免重复逻辑）
+// refresh(modal)：状态变化后的刷新回调——传入被点行所在弹窗时就地刷新（无闪烁），
+// 传 null 表示从广告确认页返回，需重建容器弹窗
 function buildSkinRows(sm, refresh) {
   const cur = storage.getTheme()
   const unlocked = storage.getUnlockedSkins()
@@ -43,55 +47,91 @@ function buildSkinRows(sm, refresh) {
       icCol: SKIN_COL[k] || '#9B8CFF',
       swatch: [t.vars['--warn'], t.zones[0]],
       title: t.label,
-      sub: t.desc || (has ? '已拥有' : '光尘解锁'),
+      sub: t.desc || (has ? '已拥有' : '光尘解锁 · 或看广告免费解锁'),
       tag: using ? '使用中' : has ? '点按切换' : t.price + '✦',
       tagColor: using ? '#FFC15E' : has ? '#6FE3D2' : '#FFD86E',
       dim: using,
-      onTap: function () {
+      onTap: function (m) {
         if (using) return
         if (!has) {
-          // 皮肤购买：光尘足额直接解锁并穿上
+          // 光尘足额：直接解锁并穿上
           if (storage.spendDust(t.price)) {
             storage.unlockSkin(k)
             storage.setTheme(k)
             sm.toast('已解锁并切换：' + t.label)
-          } else {
-            sm.toast('光尘不足：需要 ' + t.price + '✦')
+            refresh(m)
+            return
           }
-          refresh()
+          // 光尘不足：转看广告免费解锁确认页
+          sm.sceneModal(adUnlockSkin(sm, k, t, function () { refresh(null) }))
           return
         }
         storage.setTheme(k)
         sm.toast('已切换：' + t.label)
-        refresh()
+        refresh(m)
       }
     })
   }
   return rows
 }
 
+// 看广告解锁皮肤确认页（光尘不足时的免费替代路径）
+function adUnlockSkin(sm, k, t, reopen) {
+  const finish = function (ok) {
+    if (!ok) { sm.toast('广告未看完，未能解锁'); reopen(); return }
+    storage.unlockSkin(k)
+    storage.setTheme(k)
+    sm.toast('广告解锁成功：' + t.label)
+    reopen()
+  }
+  return new Modal(sm, {
+    title: '免费解锁「' + t.label + '」',
+    lines: [
+      L('光尘不足？观看一段广告即可免费解锁该皮肤，解锁后立即穿上。', { s: 12.5 }),
+      L(''),
+      L('✦ 也可继续攒光尘（' + t.price + '✦）解锁，通关 / 每日挑战 / 广告均可获取。', { s: 11, c: '#9AA0C8' })
+    ],
+    buttons: [
+      {
+        label: '▶ 看广告解锁', primary: true,
+        onTap: function () {
+          const handled = ad.showRewarded(finish)
+          // 无广告位（DEV）时走模拟广告页；adSim 须挂到当前场景（sceneAd），场景才会驱动 update/draw
+          if (!handled) sm.sceneAd(new AdSim(sm, finish, '解锁皮肤：' + t.label))
+        }
+      },
+      { label: '取消', onTap: reopen }
+    ],
+    onClose: reopen
+  })
+}
+
 // 独立皮肤弹窗（首页顶栏「皮肤」钮入口，比补给站更醒目）
 function showSkin(sm, onClose) {
-  const build = function () {
-    const rows = buildSkinRows(sm, function () { sm.sceneModal(build()) })
-    return new Modal(sm, {
+  const makeOpts = function () {
+    return {
       title: '主题皮肤',
       lines: [
         L('✦ 光尘 ' + storage.getDust() + ' · 轻点皮肤即可切换或解锁', { c: '#FFC15E', b: true, s: 13 }),
         L('已收集 ' + storage.getUnlockedSkins().length + ' / ' + theme.ORDER.length + ' 套皮肤', { c: '#6FE3D2', s: 11.5 })
       ],
-      rows: rows,
+      rows: buildSkinRows(sm, apply),
       buttons: [{ label: '关闭' }],
       onClose: onClose
-    })
+    }
   }
-  return build()
+  // m 为被点行所在弹窗：是本弹窗 → 就地刷新（无闪烁）；否则（广告确认页返回）→ 重建
+  const apply = function (m) {
+    if (m && m.title === '主题皮肤') m.refresh(makeOpts())
+    else sm.sceneModal(new Modal(sm, makeOpts()))
+  }
+  return new Modal(sm, makeOpts())
 }
 
 /* ---------- 设置（音效 / 震动 / 重置进度） ---------- */
 
 function showSettings(sm, onClose) {
-  const build = function () {
+  const makeOpts = function () {
     const sound = storage.getSetting('sound', true)
     const vib = storage.getSetting('vibration', true)
     const rows = [
@@ -99,37 +139,43 @@ function showSettings(sm, onClose) {
         ick: 'bolt', icCol: '#FFD86E',
         title: '音效', sub: '背景与事件音效',
         tag: sound ? '开' : '关', tagColor: sound ? '#6FE3D2' : '#9AA0C8',
-        onTap: function () {
+        onTap: function (m) {
           storage.setSetting('sound', !sound)
           const on = storage.getSetting('sound', true)
           sm.toast('音效' + (on ? '已开启' : '已关闭'))
-          sm.sceneModal(build())
+          apply(m)
         }
       },
       {
         ick: 'shield', icCol: '#6FE3D2',
         title: '震动', sub: '关键事件震动反馈',
         tag: vib ? '开' : '关', tagColor: vib ? '#6FE3D2' : '#9AA0C8',
-        onTap: function () {
+        onTap: function (m) {
           storage.setSetting('vibration', !vib)
           const on = storage.getSetting('vibration', true)
           sm.toast('震动' + (on ? '已开启' : '已关闭'))
-          sm.sceneModal(build())
+          apply(m)
         }
       }
     ]
-    return new Modal(sm, {
+    return {
       title: '设置',
       lines: [L('调整游戏体验', { c: '#FFC15E', b: true, s: 13 })],
       rows: rows,
       buttons: [
-        { label: '重置进度', onTap: function () { sm.sceneModal(confirmReset(sm, build)) } },
+        { label: '重置进度', onTap: function () { sm.sceneModal(confirmReset(sm, back)) } },
         { label: '关闭' }
       ],
       onClose: onClose
-    })
+    }
   }
-  return build()
+  // 开关切换：就地刷新（此前整弹重建会重播入场动画 → 视觉闪烁）
+  const apply = function (m) {
+    if (m && m.title === '设置') m.refresh(makeOpts())
+    else back()
+  }
+  const back = function () { sm.sceneModal(new Modal(sm, makeOpts())) }
+  return new Modal(sm, makeOpts())
 }
 
 // 重置进度二次确认（保留广告解锁的关卡）
@@ -145,7 +191,7 @@ function confirmReset(sm, back) {
 }
 
 function showSupply(sm, onClose) {
-  const build = function () {
+  const makeOpts = function () {
     const rows = []
 
     rows.push({ header: '—— 道具强化（永久生效）——' })
@@ -162,11 +208,11 @@ function showSupply(sm, onClose) {
           tag: maxed ? 'MAX' : storage.UPG_COST[lv] + '✦',
           tagColor: maxed ? '#9AA0C8' : '#FFD86E',
           dim: maxed,
-          onTap: function () {
+          onTap: function (m) {
             if (maxed) { sm.toast('已满级'); return }
             if (storage.buyUpgrade(k)) sm.toast('升级成功！')
             else sm.toast('光尘不足')
-            sm.sceneModal(build())
+            apply(m)
           }
         })
       })(k)
@@ -185,28 +231,33 @@ function showSupply(sm, onClose) {
           tag: sk[key] ? '已解锁' : storage.SKILL_COST[key] + '✦',
           tagColor: sk[key] ? '#6FE3D2' : '#FFD86E',
           dim: !!sk[key],
-          onTap: function () {
+          onTap: function (m) {
             if (sk[key]) { sm.toast('已解锁'); return }
             if (storage.buySkill(key)) sm.toast('已解锁 ' + meta.name)
             else sm.toast('光尘不足')
-            sm.sceneModal(build())
+            apply(m)
           }
         })
       })(key)
     }
 
     rows.push({ header: '—— 皮肤 ——' })
-    buildSkinRows(sm, function () { sm.sceneModal(build()) }).forEach(function (r) { rows.push(r) })
+    buildSkinRows(sm, apply).forEach(function (r) { rows.push(r) })
 
-    return new Modal(sm, {
+    return {
       title: '补给站',
       lines: [L('✦ 光尘 ' + storage.getDust() + ' · 通关/每日/广告获取（不可充值）', { c: '#FFC15E', b: true, s: 14 })],
       rows: rows,
       buttons: [{ label: '关闭' }],
       onClose: onClose
-    })
+    }
   }
-  return build()
+  // 购买/皮肤切换：就地刷新（不重播入场动画、保留滚动位置）
+  const apply = function (m) {
+    if (m && m.title === '补给站') m.refresh(makeOpts())
+    else sm.sceneModal(new Modal(sm, makeOpts()))
+  }
+  return new Modal(sm, makeOpts())
 }
 
 /* ---------- 成就图鉴 ---------- */
@@ -400,7 +451,7 @@ function showCode(sm, startFn, onClose) {
   const T = challenge.TEMPLATES
   // 会话内稳定种子：选模板/词缀时口令前缀不变
   const state = { tpl: 0, mods: [], seed: Math.floor(Math.random() * 0xFFF) }
-  const build = function () {
+  const build = function (existing) {
     const rows = []
     rows.push({ header: '—— 模板 ——' })
     T.forEach(function (t, i) {
@@ -412,7 +463,7 @@ function showCode(sm, startFn, onClose) {
         tag: state.tpl === i ? '✓ 已选' : '选择',
         tagColor: state.tpl === i ? '#FFC15E' : '#9AA0C8',
         dim: state.tpl === i,
-        onTap: function () { state.tpl = i; sm.sceneModal(build()) }
+        onTap: function (m) { state.tpl = i; build(m) }
       })
     })
     rows.push({ header: '—— 词缀（点选叠加）——' })
@@ -426,15 +477,15 @@ function showCode(sm, startFn, onClose) {
         tag: on ? '已添加' : '添加',
         tagColor: on ? '#6FE3D2' : '#9AA0C8',
         dim: false,
-        onTap: function () {
+        onTap: function (m) {
           if (on) state.mods = state.mods.filter(function (k) { return k !== m.key })
           else state.mods.push(m.key)
-          sm.sceneModal(build())
+          build(m)
         }
       })
     })
     const code = challenge.encode(state.tpl, state.mods, state.seed)
-    return new Modal(sm, {
+    const opts = {
       title: '挑战码',
       lines: [
         L('把口令发给好友，对方点「粘贴口令」进入同一关卡；回首页也会自动识别剪贴板。', { s: 11, c: '#9AA0C8' }),
@@ -450,7 +501,10 @@ function showCode(sm, startFn, onClose) {
         { label: '关闭' }
       ],
       onClose: onClose
-    })
+    }
+    // 选模板/词缀：就地刷新（不重播入场动画、保留滚动位置）
+    if (existing) return existing.refresh(opts)
+    return new Modal(sm, opts)
   }
   return build()
 }

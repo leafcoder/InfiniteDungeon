@@ -36,7 +36,7 @@ const THEMES = {
   },
   glow: {
     label: '夜光',
-    price: 120,
+    price: 80,
     vars: {
       '--bg-1': '#02100C',
       '--bg-2': '#06222B',
@@ -64,7 +64,7 @@ const THEMES = {
   },
   festival: {
     label: '节日',
-    price: 260,
+    price: 150,
     vars: {
       '--bg-1': '#3A0D2B',
       '--bg-2': '#7A1230',
@@ -92,7 +92,7 @@ const THEMES = {
   },
   cosmos: {
     label: '星穹',
-    price: 500,
+    price: 260,
     vars: {
       '--bg-1': '#0A0A2E',
       '--bg-2': '#1C1245',
@@ -121,7 +121,7 @@ const THEMES = {
   abyss: {
     label: '深渊',
     desc: '深海气泡 · 静谧蓝绿',
-    price: 380,
+    price: 200,
     vars: {
       '--bg-1': '#021A2E',
       '--bg-2': '#063A52',
@@ -150,7 +150,7 @@ const THEMES = {
   sakura: {
     label: '樱粉',
     desc: '樱花飘落 · 柔粉治愈',
-    price: 750,
+    price: 320,
     vars: {
       '--bg-1': '#2C1238',
       '--bg-2': '#5E2150',

@@ -163,7 +163,21 @@ Modal.prototype._isTap = function (tx, ty) {
 }
 
 Modal.prototype.update = function () {
-  if (this.sc.update(Date.now() / 1000)) this.dirty = true
+  if (this.sc.update()) this.dirty = true
+}
+
+// 就地刷新：更新标题/正文/行卡并重测内容高度，保留滚动位置、不重播入场动画。
+// 用于开关切换、购买后状态更新——此前整弹重建（sm.sceneModal(build())）会重新播放入场
+// 动画并清空滚动位置，表现为"点一下闪一下"。
+Modal.prototype.refresh = function (opts) {
+  if (!opts) return this
+  if (opts.title !== undefined) this.title = opts.title
+  if (opts.lines) this.lines = opts.lines
+  if (opts.rows) this.rows = opts.rows
+  this.sc.setContent(this.measureBody())
+  this.sc.clampHard()
+  this.dirty = true
+  return this
 }
 
 /* ---------- 绘制 ---------- */

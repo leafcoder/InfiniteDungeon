@@ -73,7 +73,14 @@ ScrollView.prototype.touchEnd = function () {
 }
 
 // 返回 true 表示仍在滚动/回弹（调用方据此标记重绘）
-ScrollView.prototype.update = function (dt) {
+// 注意：dt 由内部按真实帧间隔计算（秒，上限 50ms）。此前外部传入 Date.now()/1000 绝对
+// 时间戳，导致惯性 pow(0.0025, dt) 瞬间归零、回弹无过渡——滚动"很不顺畅"的根因。
+ScrollView.prototype.update = function () {
+  const now = Date.now()
+  let dt = (now - (this._lastT || now)) / 1000
+  this._lastT = now
+  if (!(dt > 0)) dt = 0.016
+  if (dt > 0.05) dt = 0.05 // 后台切回等大间隔，防止位移爆炸
   let active = false
   // 回弹：越界时向边界弹簧收敛
   if (!this.dragging) {

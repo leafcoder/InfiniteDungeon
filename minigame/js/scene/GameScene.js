@@ -174,6 +174,7 @@ GameScene.prototype.onTouchStart = function (tx, ty) {
   }
   if (this.loading) return
   if (this.backBtn) this.backBtn.touch(tx, ty, true)
+  if (this.helpBtn) this.helpBtn.touch(tx, ty, true)
   if (this.bagBtns) for (let i = 0; i < this.bagBtns.length; i++) this.bagBtns[i].touch(tx, ty, true)
   if (this.skillBtns) for (let i = 0; i < this.skillBtns.length; i++) this.skillBtns[i].touch(tx, ty, true)
   this.touchStart = { x: tx, y: ty }
@@ -209,6 +210,7 @@ GameScene.prototype.onTouchEnd = function (tx, ty) {
   }
   if (this.loading) return
   if (this.backBtn) this.backBtn.touch(tx, ty, false)
+  if (this.helpBtn) this.helpBtn.touch(tx, ty, false)
   if (this.bagBtns) for (let i = 0; i < this.bagBtns.length; i++) this.bagBtns[i].touch(tx, ty, false)
   if (this.skillBtns) for (let i = 0; i < this.skillBtns.length; i++) this.skillBtns[i].touch(tx, ty, false)
   if (!this.touchStart) return
@@ -815,31 +817,33 @@ GameScene.prototype.drawCompass = function (ctx, v, u, W) {
   const dx = ex.x - this.core.state.x
   const dy = ex.y - this.core.state.y
   const ang = Math.atan2(dy, dx)
-  const cx = W - 26 * u
-  const cy = this.hudH + 22 * u
-  const r = 12 * u
+  // 左下角（与右下角小地图对角平衡）：原右上位置紧贴「返回」按钮文字，箭头显突兀
+  const cx = 32 * u
+  const cy = this.sm.H - (this.sm.sab || 10 * u) - 46 * u
+  const r = 11 * u
   ctx.save()
   ctx.textAlign = 'center'
   ctx.beginPath()
   ctx.arc(cx, cy, r, 0, Math.PI * 2)
-  ctx.fillStyle = 'rgba(10,12,32,0.55)'
+  ctx.fillStyle = 'rgba(10,12,32,0.42)'
   ctx.fill()
   ctx.lineWidth = 1
-  ctx.strokeStyle = 'rgba(255,216,110,0.55)'
+  ctx.strokeStyle = 'rgba(255,216,110,0.35)'
   ctx.stroke()
   ctx.translate(cx, cy)
   ctx.rotate(ang)
   ctx.beginPath()
   ctx.moveTo(r - 3 * u, 0)
-  ctx.lineTo(-(r - 4 * u), -4 * u)
-  ctx.lineTo(-(r - 4 * u), 4 * u)
+  ctx.lineTo(-(r - 4 * u), -3.4 * u)
+  ctx.lineTo(-(r - 6 * u), 0)
+  ctx.lineTo(-(r - 4 * u), 3.4 * u)
   ctx.closePath()
-  ctx.fillStyle = '#FFD86E'
+  ctx.fillStyle = 'rgba(255,216,110,0.92)'
   ctx.fill()
   ctx.restore()
-  ctx.fillStyle = 'rgba(243,241,255,0.85)'
+  ctx.fillStyle = 'rgba(243,241,255,0.65)'
   ctx.font = Math.round(8 * u) + 'px sans-serif'
-  ctx.fillText('出口', cx, cy + r + 10 * u)
+  ctx.fillText('出口', cx, cy + r + 11 * u)
 }
 
 // 生存模式玩法说明（游戏内随时可查，弹窗期间游戏暂停）
@@ -1007,6 +1011,18 @@ GameScene.prototype.drawMinimap = function (ctx, v, u) {
   // 出口（有钥匙=绿可出，否则金=锁）
   ctx.fillStyle = core.hasKey ? '#6EE7A0' : '#FFD86E'
   ctx.fillRect(mmX + m.end.x * sx - 1, mmY + m.end.y * sy - 1, sx + 2, sy + 2)
+  // 星尘（小金点）与道具/钥匙（主题色点）
+  for (let i = 0; i < core.items.length; i++) {
+    const it = core.items[i]
+    if (it.taken) continue
+    if (it.type === 'gem') ctx.fillStyle = 'rgba(255,216,110,0.85)'
+    else if (it.type === 'key') ctx.fillStyle = '#FFD86E'
+    else ctx.fillStyle = FX_COLOR[it.type] || '#9B8CFF'
+    const rr = it.type === 'gem' ? Math.max(0.8, sx * 0.38) : Math.max(1.6, sx * 0.62)
+    ctx.beginPath()
+    ctx.arc(mmX + it.x * sx + sx / 2, mmY + it.y * sy + sy / 2, rr, 0, Math.PI * 2)
+    ctx.fill()
+  }
   // 怪物
   for (let i = 0; i < core.monsters.length; i++) {
     const mm = core.monsters[i]

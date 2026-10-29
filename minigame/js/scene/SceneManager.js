@@ -72,6 +72,11 @@ SceneManager.prototype.sceneModal = function (modal) {
   if (this.current) this.current.modal = modal
 }
 
+// 在当前场景上播放激励广告模拟页（场景负责 update/draw，见各场景 adSim 分支）
+SceneManager.prototype.sceneAd = function (adSim) {
+  if (this.current) this.current.adSim = adSim
+}
+
 // 全局 Toast（交由当前场景显示）
 SceneManager.prototype.toast = function (msg) {
   if (this.current && this.current.showToast) this.current.showToast(msg)
