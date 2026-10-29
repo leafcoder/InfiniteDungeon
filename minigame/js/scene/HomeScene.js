@@ -109,10 +109,11 @@ HomeScene.prototype.enter = function () {
     x: W / 2 - 120 * u, y: dockY - 66 * u, w: 240 * u, h: 54 * u,
     label: '▶ 继续冒险', sub: '第 ' + this.unlocked + ' 关 · ' + this.zoneOf(this.unlocked).name,
     fontSize: Math.round(16 * u),
-    fill: '#FFC15E', fill2: '#FF9F6E', textColor: '#3A2A08',
-    primary: true,
+    fill: '#FFC15E', fill2: '#FF9F6E', textColor: 'rgba(10,12,32,0.92)',
+    primary: true, radius: 27 * u,
     onTap: function () { self.sm.switch('game', { level: self.unlocked }) }
   })
+  this.styleGoBtn()
   this.dock = []
   const dw = (W - 32 * u - 4 * 8 * u) / 5
   DOCK.forEach(function (d, i) {
@@ -295,6 +296,26 @@ HomeScene.prototype.zoneColor = function (zi) {
   return theme.getTheme(storage.getTheme()).zones[zi]
 }
 
+// CTA 配色跟随目标分区色（与 Hero 卡/节点图/圆点同源，消除固定橙色的割裂感）
+// 语义锚定「继续冒险要进的分区」（unlocked 所在区），与按钮副标题文案一致
+HomeScene.prototype.styleGoBtn = function () {
+  if (!this.goBtn) return
+  const zi = Math.max(0, ZONES.indexOf(this.zoneOf(this.unlocked)))
+  const zc = this.zoneColor(zi)
+  if (zc && zc.charAt(0) === '#') {
+    // 第二渐变stop：向暗部收 34%，保证 primary 光晕与扫光有层次
+    const dr = (parseInt(zc.slice(1, 3), 16) * 0.66) | 0
+    const dg = (parseInt(zc.slice(3, 5), 16) * 0.66) | 0
+    const db = (parseInt(zc.slice(5, 7), 16) * 0.66) | 0
+    this.goBtn.fill = zc
+    this.goBtn.fill2 = 'rgb(' + dr + ',' + dg + ',' + db + ')'
+  } else {
+    this.goBtn.fill = zc || '#FFC15E'
+    this.goBtn.fill2 = zc || '#FF9F6E'
+  }
+  this.goBtn.textColor = 'rgba(10,12,32,0.92)'
+}
+
 // 入场编排：区段 i 的局部进度
 HomeScene.prototype.ent = function (i) {
   const p = Math.max(0, Math.min(1, this.eto * 1.55 - i * 0.15))
@@ -430,6 +451,7 @@ HomeScene.prototype.refreshUnlock = function () {
   if (this.goBtn) {
     this.goBtn.label = '▶ 继续冒险'
     this.goBtn.sub = '第 ' + this.unlocked + ' 关 · ' + this.zoneOf(this.unlocked).name
+    this.styleGoBtn()
   }
   const zoneIdx = ZONES.indexOf(this.zoneOf(this.unlocked))
   if (zoneIdx >= 0 && zoneIdx !== this.activeZone) this.activeZone = zoneIdx
@@ -493,6 +515,9 @@ HomeScene.prototype.update = function (dt) {
     if (this.modal.dirty) this.dirty = true
     return
   }
+  // CTA 配色与进度/皮肤联动（换肤或进度变化后的下一帧自动对齐）
+  const goKey = this.unlocked + ':' + storage.getTheme()
+  if (goKey !== this._goKey) { this._goKey = goKey; this.styleGoBtn() }
   const scrolling = this.gridSc.update(dt)
   const toasting = Date.now() < this.toastUntil + 300
   if (scrolling || toasting) this.dirty = true

@@ -35,6 +35,7 @@ function Button(opts) {
   this.disabled = !!opts.disabled
   this.glass = !!opts.glass                 // 玻璃态：半透明底 + 细描边
   this.round = !!opts.round                 // 圆形（图标钮）：半径 = min(w,h)/2
+  this.radius = opts.radius || 0            // 自定义圆角（0 = 默认公式）
   this.iconSize = opts.iconSize || 0        // 图标字号（与主标签分离时可设）
   this.phase = Math.random() * 6.28         // 光晕呼吸错相
   this.pressed = false
@@ -77,7 +78,7 @@ Button.prototype.draw = function (ctx) {
 
   const bx = this.x
   const by = this.y + this.oy
-  const r = this.round ? Math.min(this.w, this.h) / 2 : Math.min(this.h / 2, 14 + this.h * 0.08)
+  const r = this.round ? Math.min(this.w, this.h) / 2 : (this.radius || Math.min(this.h / 2, 14 + this.h * 0.08))
 
   // 柔影（primary 更深）
   ctx.shadowColor = this.primary ? this.fill : 'rgba(0,0,0,0.35)'
