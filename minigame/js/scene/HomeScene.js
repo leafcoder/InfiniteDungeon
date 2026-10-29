@@ -1,7 +1,7 @@
 /**
  * 首页场景（UI 3.0：布局与配色重设计）
  * 信息架构：
- *   顶栏（Logo 锁定组合 + 圆形图标钮[图鉴/挑战码] + 光尘胶囊）
+ *   顶栏（左侧：Logo 锁定组合 + 光尘胶囊；右侧：圆形图标钮[图鉴/挑战码/皮肤/设置]）
  *   → Hero 分区卡（分区色渐变大卡，滑动/箭头/圆点切换，取代 6 Tab 横滚）
  *   → 关卡节点旅程图（圆形节点 + 行内连接线 + 星级）
  *   → 悬浮主 CTA（光晕 + 扫光 + 副标题）
@@ -79,7 +79,7 @@ HomeScene.prototype.enter = function () {
   this.heroT = 1
   this.heroFrom = 1
 
-  // ---- 顶栏：Logo 与胶囊同行（左侧），图标/光尘行移到胶囊下方（右侧） ----
+  // ---- 顶栏：标题 + 光尘（左），圆形图标钮（右） ----
   this.iconBtns = []
   const TOPY = (this.sm.capB || SAT + 40) + 2 * u   // 胶囊下缘以下
   const ibD = 28 * u
@@ -99,8 +99,9 @@ HomeScene.prototype.enter = function () {
       onTap: function () { self.openEntry(def.key) }
     }))
   })
-  // 光尘胶囊（纯展示，与图标同行，位于最左图标钮左侧）
-  this.pillRect = { x: W - 16 * u - ibD - (self.iconBtns.length - 1) * (ibD + ibGap) - ibGap - 84 * u, y: TOPY + 1 * u, w: 84 * u, h: 28 * u }
+  // 光尘胶囊：移到标题正下方左侧（独立第二行），避免遮挡游戏名并减少顶栏右侧拥挤
+  const gy = SAT + 28 * u
+  this.pillRect = { x: 30 * u, y: gy + 30 * u, w: 84 * u, h: 28 * u }
 
   // ---- 底部锚点：Dock → CTA（先算底部，网格高度随之自适应） ----
   const dockY = H - SAB - 12 * u - 56 * u
@@ -122,8 +123,9 @@ HomeScene.prototype.enter = function () {
     })
   })
 
-  // ---- Hero 卡（图标行下方） ----
-  this.hero = { x: 16 * u, y: TOPY + 30 * u + 14 * u, w: W - 32 * u, h: 140 * u }
+  // ---- Hero 卡（顶栏内容下方，取按钮行与光尘胶囊下沿较大值再留白） ----
+  const clusterBottom = Math.max(TOPY + ibD, this.pillRect.y + this.pillRect.h)
+  this.hero = { x: 16 * u, y: clusterBottom + 14 * u, w: W - 32 * u, h: 140 * u }
   this.heroSc = new ScrollView({ x: this.hero.x, y: this.hero.y, w: this.hero.w, h: this.hero.h, horizontal: true })
   // 左右箭头（圆形玻璃钮，垂直居中）
   this.chevL = new Button({
@@ -679,33 +681,48 @@ HomeScene.prototype.drawHero = function (ctx, v) {
   ctx.textAlign = 'right'
   ctx.fillText('已通关 ' + done + '/20', h.x + h.w - 56 * u, by + 18 * u)
 
-  // 徽章：当前进度 / 锁定
+  // 徽章：状态指示（锁定 / 进行中 / 已通关）—— 右上角状态标，与左侧「第 X–Y 关」文案分离，文字在容器内垂直居中
   ctx.textAlign = 'left'
+  let badgeW, badgeText
+  if (locked) {
+    // 锁定：明确写出「需通关的最后一关」(zone.start-1)，而非用当前进度误导
+    const need = Math.max(1, zone.start - 1)
+    badgeW = 184 * u
+    badgeText = '🔒 通关第 ' + need + ' 关解锁'
+  } else if (this.unlocked >= zone.start && this.unlocked <= zone.end) {
+    badgeW = 156 * u
+    badgeText = '▶ 进行中 · 第 ' + this.unlocked + ' 关'
+  } else {
+    badgeW = 132 * u
+    badgeText = done >= 20 ? '✓ 已制霸' : '已通关 ' + done + '/20'
+  }
+  const bx = h.x + h.w - 20 * u - badgeW
+  const bby = h.y + 20 * u
   if (locked) {
     ctx.fillStyle = 'rgba(0,0,0,0.45)'
-    roundRect(ctx, h.x + 46 * u, h.y + 52 * u, 168 * u, 30 * u, 15 * u)
+    roundRect(ctx, bx, bby, badgeW, 30 * u, 15 * u)
     ctx.fill()
     ctx.fillStyle = v['--text-sub']
     ctx.font = Math.round(11.5 * u) + 'px sans-serif'
-    ctx.fillText('🔒 通过第 ' + this.unlocked + ' 关解锁', h.x + 60 * u, h.y + 71 * u)
+    ctx.fillText(badgeText, bx + 14 * u, bby + 20 * u)
   } else if (this.unlocked >= zone.start && this.unlocked <= zone.end) {
     ctx.save()
     ctx.shadowColor = zc
     ctx.shadowBlur = 8
-    roundRect(ctx, h.x + 46 * u, h.y + 52 * u, 132 * u, 30 * u, 15 * u)
+    roundRect(ctx, bx, bby, badgeW, 30 * u, 15 * u)
     ctx.fillStyle = this.hexA(zc, 0.9)
     ctx.fill()
     ctx.restore()
     ctx.fillStyle = 'rgba(10,12,32,0.9)'
     ctx.font = 'bold ' + Math.round(11.5 * u) + 'px sans-serif'
-    ctx.fillText('▶ 当前进度 · 第 ' + this.unlocked + ' 关', h.x + 58 * u, h.y + 71 * u)
+    ctx.fillText(badgeText, bx + 14 * u, bby + 20 * u)
   } else {
     ctx.fillStyle = this.hexA(zc, 0.85)
-    roundRect(ctx, h.x + 46 * u, h.y + 52 * u, 96 * u, 30 * u, 15 * u)
+    roundRect(ctx, bx, bby, badgeW, 30 * u, 15 * u)
     ctx.fill()
     ctx.fillStyle = 'rgba(10,12,32,0.9)'
     ctx.font = 'bold ' + Math.round(11.5 * u) + 'px sans-serif'
-    ctx.fillText(done >= 20 ? '✓ 已制霸' : '回顾练习', h.x + 58 * u, h.y + 71 * u)
+    ctx.fillText(badgeText, bx + 14 * u, bby + 20 * u)
   }
 
   // 左右箭头
