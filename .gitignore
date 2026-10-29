@@ -1,0 +1,5 @@
+# WorkBuddy 项目内部数据（不纳入版本管理）
+.workbuddy/
+
+# 依赖
+node_modules/
