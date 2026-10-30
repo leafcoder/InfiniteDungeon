@@ -78,6 +78,11 @@ GameScene.prototype.enter = function (params) {
   this.banner = null
   this.redFlash = 0
   this.whiteFlash = 0
+  // 新手引导（E5）：仅普通关卡 + 设置开关开启时生效
+  this.tutOn = this.mode === 'level' && storage.getSetting('tutorial', true)
+  this._bagCount = 0
+  this.tutPickHinted = false
+  this._usedItem = false // 本局是否用过道具（赤手空拳成就判定）
   fx.clear()
   // 加载过渡页（M4）：最小 650ms，首帧完成后淡出
   this.loading = { until: Date.now() + 650, tipIdx: 0, tipUntil: 0 }
@@ -247,6 +252,20 @@ GameScene.prototype.update = function () {
     else if (this.mode === 'weekly') this.setHint('周挑战 第' + (this.weekIdx + 1) + '关 · 词缀生效中')
     else if (this.mode === 'custom') this.setHint('自定义挑战 · 词缀生效中')
     else if (this.mode === 'survival') this.setHint('生存模式 · 坚持尽可能多的波次！')
+    // 系统级教学（E5）：新机制首次触达时提示一次（钥匙/传送门/迷雾/Boss）
+    if (this.tutOn) {
+      const sysHints = {
+        16: ['t_sys_key', '先找钥匙 🔑，锁着的门才打得开'],
+        26: ['t_sys_portal', '发光的圆环是传送门，踩上即传送到孪生门'],
+        41: ['t_sys_fog', '迷雾挡视线：火把照亮脚下，照明弹照亮远方'],
+        81: ['t_sys_boss', '限时追逐关：倒计时结束前逃出出口！']
+      }
+      const sh = sysHints[this.level]
+      if (sh && !storage.getFlag(sh[0])) {
+        storage.setFlag(sh[0])
+        this.setHint(sh[1])
+      }
+    }
   }
   if (this.loading) {
     const tipIdx = Math.floor(Date.now() / 900) % LOAD_TIPS.length
@@ -259,6 +278,19 @@ GameScene.prototype.update = function () {
   for (let i = 0; i < evs.length; i++) this.handleEvent(evs[i])
   // 镜头跟随（边缘触发死区）：玩家走出屏幕中央区域才滚动迷宫
   this.updateCamera()
+  // 新手引导推进（E5）：移动 → 捡取 → 使用 三步标记
+  if (this.tutOn && !core.won && !core.dead) {
+    if (this.level === 1 && core.steps >= 3 && !storage.getFlag('t_move')) {
+      storage.setFlag('t_move')
+      this.setHint('很好！沿途光尘别错过')
+    }
+    const bc = core.bag.length
+    if ((this.level === 2 || this.level === 3) && this._bagCount > bc && !storage.getFlag('t_use')) {
+      storage.setFlag('t_use')
+      this.setHint('用得妙！道具效果立即生效')
+    }
+    this._bagCount = bc
+  }
   // 幽灵竞速插值
   if (this.ghost) {
     const gt = (Date.now() - this._startTime) / 1000
@@ -349,6 +381,12 @@ GameScene.prototype.handleEvent = function (ev) {
     case 'pickup': {
       this.snd(d.type === 'gem' ? 'pick' : 'power')
       try { storage.encounterCodex(d.type === 'gem' ? 'i_gem' : 'i_' + d.type) } catch (e) {}
+      // 新手教学：首次捡到功能道具（前 3 关）
+      if (this.tutOn && this.level <= 3 && d.type !== 'gem' && !this.tutPickHinted) {
+        this.tutPickHinted = true
+        if (!storage.getFlag('t_pick')) storage.setFlag('t_pick')
+        this.setHint('捡到道具！放进右侧背包，点按即可使用')
+      }
       // 拾取点粒子 + 飘字
       const st = this.core.state
       const L = computeLayout(this.core, this.view)
@@ -436,11 +474,14 @@ GameScene.prototype.onWin = function (st) {
       dustEarn = Math.max(3, st.gems)
       const info = storage.completeDaily(storage.dailyKey(), { time: st.time, steps: st.steps, swipe: st.swipe, stars: stars, gems: st.gems, gemTotal: st.gemTotal })
       if (info && info.better) extra.push('破纪录！')
+      if (info && info.bonus > 0) extra.push('🔥 连续 ' + info.streak + ' 天 +' + info.bonus + '✦')
+      if (info && info.newAch && info.newAch.length) extra.push('🏅 ' + info.newAch.join('、'))
       if (this.ghostPathCandidate(st)) storage.saveGhost(storage.dailyKey(), { path: this.core.ghostPath, gems: st.gems })
     } else if (this.mode === 'weekly') {
       dustEarn = Math.max(3, st.gems)
       storage.completeWeekLevel(weekly.weekKey(), this.weekIdx)
-      extra.push('周挑战进度 +1')
+      const prog = weekly.weekProgress()
+      extra.push(prog.done >= 5 ? '周挑战 5/5 · 可领周奖励！' : '周挑战进度 +1（' + prog.done + '/5）')
     } else if (this.mode === 'custom') {
       dustEarn = Math.max(1, st.gems)
       extra.push('挑战完成')
@@ -448,7 +489,13 @@ GameScene.prototype.onWin = function (st) {
       const firstClear = !storage.getProgress().completed[this.level]
       dustEarn = firstClear ? st.gems : Math.max(1, Math.floor(st.gems / 2))
       storage.completeLevel(this.level, { time: st.time, steps: st.steps, swipe: st.swipe, stars: stars, gems: st.gems, gemTotal: st.gemTotal })
-      storage.recordWin(this.level, st.time)
+      // 成就结算（N3）：解锁瞬间发放光尘奖励并在结算页展示
+      const newAch = storage.recordWin(this.level, { time: st.time, steps: st.steps, swipe: st.swipe, stars: stars, gems: st.gems, gemTotal: st.gemTotal, perfect: st.gems >= st.gemTotal, usedItem: this._usedItem, boss: this.core.bossOn, timeOK: timeOK })
+      for (let i = 0; i < newAch.length; i++) {
+        const na = newAch[i]
+        extra.push('🏅 ' + na.name + (na.reward > 0 ? ' +' + na.reward + '✦' : ''))
+      }
+      if (this.level === 3) extra.push('下一关将出现钥匙与锁门！')
     }
     // 连击光尘加成（仅普通关卡计入连击，封顶 +10✦）
     if (this.mode === 'level') {
@@ -492,25 +539,41 @@ GameScene.prototype.onFail = function (reason) {
     extra.push('撑到第 ' + reached + ' 波')
   }
   const canRevive = !this.reviveUsed
-  const btns = [
-    {
+  // 新手教学（E5）：首次失败给「原地复活」免费教学一次 + 失败代价提示
+  const tutDeath = this.tutOn && canRevive && !storage.getFlag('t_death') && this.level <= 20
+  if (tutDeath) {
+    storage.setFlag('t_death')
+    extra.push('教学：被追上会失败——观察怪物视线，快步绕开')
+  }
+  const retry = function () {
+    self.enter({ level: self.level, mode: self.mode, weekIdx: self.weekIdx, mods: self.mods, seed: self.mode === 'daily' ? storage.dailySeed() : self.seed })
+  }
+  const btns = []
+  if (tutDeath) {
+    // 教学复活：免费原地复活（与广告复活同效），不消耗广告机会
+    btns.push({
+      label: '原地复活（教学）',
+      primary: true,
+      onTap: function () {
+        self.reviveUsed = true
+        self.core.revive()
+        self.overlay = null
+        self.setHint('复活！3 秒无敌，快走')
+      }
+    })
+    btns.push({ label: '再试一次', onTap: retry })
+  } else {
+    btns.push({
       label: canRevive ? '看广告复活' : '再试一次',
       primary: true,
       onTap: function () {
         if (canRevive) self.showReviveAd()
-        else self.enter({ level: self.level, mode: self.mode, weekIdx: self.weekIdx, mods: self.mods, seed: self.mode === 'daily' ? storage.dailySeed() : self.seed })
-      }
-    },
-    { label: '返回首页', onTap: function () { self.sm.switch('home') } }
-  ]
-  if (canRevive) {
-    btns.push({
-      label: '放弃复活',
-      onTap: function () {
-        self.enter({ level: self.level, mode: self.mode, weekIdx: self.weekIdx, mods: self.mods, seed: self.mode === 'daily' ? storage.dailySeed() : self.seed })
+        else retry()
       }
     })
   }
+  btns.push({ label: '返回首页', onTap: function () { self.sm.switch('home') } })
+  if (canRevive && !tutDeath) btns.push({ label: '放弃复活', onTap: retry })
   this.buildOverlay('fail', { title: '挑战失败', lines: [reason || '再试一次'].concat(extra), btns: btns })
 }
 
@@ -617,6 +680,9 @@ GameScene.prototype.draw = function (ctx) {
   this.view.now = Date.now()
   drawBoard(ctx, this.core, this.view)
 
+  // 新手教学：前 3 关出口光柱（绿色光束标记出口位置）
+  if (this.tutOn && this.level <= 3 && !this.core.won) this.drawExitBeam(ctx, u)
+
   // 幽灵竞速
   if (this.ghostPos) {
     const L = computeLayout(this.core, this.view)
@@ -638,6 +704,11 @@ GameScene.prototype.draw = function (ctx) {
 
   // 右下角小地图（镜头滚动后提供全貌与威胁分布）
   this.drawMinimap(ctx, v, u)
+
+  // 新手教学：L1 移动教学浮条（学会移动后消失）
+  if (this.tutOn && this.level === 1 && !storage.getFlag('t_move') && !this.core.won && !this.core.dead) {
+    this.drawTutorialPill(ctx, u, W, '👆 按住屏幕拖动，带旅人走向出口')
+  }
 
   // 危险红晕：最近怪物距离
   const danger = this.dangerLevel()
@@ -662,6 +733,50 @@ GameScene.prototype.draw = function (ctx) {
   if (this.overlay) this.drawOverlay(ctx, v, u)
   // 系统弹窗
   if (this.modal) this.modal.draw(ctx)
+  ctx.restore()
+}
+
+// 新手教学：出口光柱（棋盘坐标系内，随镜头滚动）
+GameScene.prototype.drawExitBeam = function (ctx, u) {
+  const core = this.core
+  if (!core || !core.maze) return
+  const L = computeLayout(core, this.view)
+  const m = core.maze
+  const ex = L.ox + m.end.x * L.cs + L.cs / 2
+  const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 420)
+  ctx.save()
+  const bw = L.cs * (0.9 + 0.25 * pulse)
+  const bg = ctx.createLinearGradient(0, this.view.by, 0, this.view.by + this.view.bh)
+  bg.addColorStop(0, 'rgba(110,231,160,0)')
+  bg.addColorStop(0.75, 'rgba(110,231,160,' + (0.10 + 0.08 * pulse) + ')')
+  bg.addColorStop(1, 'rgba(110,231,160,0.30)')
+  ctx.fillStyle = bg
+  ctx.fillRect(ex - bw / 2, this.view.by, bw, this.view.bh)
+  ctx.restore()
+}
+
+// 新手教学：顶部教学浮条（HUD 下方居中）
+GameScene.prototype.drawTutorialPill = function (ctx, u, W, text) {
+  const y = (this.sm.sat || 0) + 96 * u
+  ctx.save()
+  ctx.font = 'bold ' + Math.round(13 * u) + 'px sans-serif'
+  const tw = ctx.measureText(text).width
+  const pw = tw + 36 * u
+  const ph = 34 * u
+  const px = W / 2 - pw / 2
+  const breathe = 1 + 0.03 * Math.sin(Date.now() / 500)
+  ctx.translate(W / 2, y + ph / 2)
+  ctx.scale(breathe, breathe)
+  ctx.translate(-W / 2, -(y + ph / 2))
+  roundRect(ctx, px, y, pw, ph, ph / 2)
+  ctx.fillStyle = 'rgba(10,12,32,0.72)'
+  ctx.fill()
+  ctx.lineWidth = 1.2
+  ctx.strokeStyle = 'rgba(255,216,110,0.55)'
+  ctx.stroke()
+  ctx.textAlign = 'center'
+  ctx.fillStyle = '#FFE9A8'
+  ctx.fillText(text, W / 2, y + ph / 2 + 1)
   ctx.restore()
 }
 
@@ -943,6 +1058,7 @@ GameScene.prototype.drawBag = function (ctx, u) {
         fill: 'rgba(255,255,255,0.10)', fill2: 'rgba(255,255,255,0.06)', textColor: '#F3F1FF',
         onTap: function () {
           if (self.overlay || self.loading || self.core.bag.length === 0) return
+          self._usedItem = true
           self.core.useItem(Math.min(self.core.bagSel, self.core.bag.length - 1))
         }
       }))

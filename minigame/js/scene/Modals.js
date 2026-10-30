@@ -226,6 +226,7 @@ function showSettings(sm, onClose) {
   const makeOpts = function () {
     const sound = storage.getSetting('sound', true)
     const vib = storage.getSetting('vibration', true)
+    const tut = storage.getSetting('tutorial', true)
     const rows = [
       {
         ick: 'bolt', icCol: '#FFD86E',
@@ -246,6 +247,17 @@ function showSettings(sm, onClose) {
           storage.setSetting('vibration', !vib)
           const on = storage.getSetting('vibration', true)
           sm.toast('震动' + (on ? '已开启' : '已关闭'))
+          apply(m)
+        }
+      },
+      {
+        ick: 'map', icCol: '#9B8CFF',
+        title: '新手引导', sub: '关卡内的移动/道具/新机制教学提示',
+        tag: tut ? '开' : '关', tagColor: tut ? '#6FE3D2' : '#9AA0C8',
+        onTap: function (m) {
+          storage.setSetting('tutorial', !tut)
+          const on = storage.getSetting('tutorial', true)
+          sm.toast('新手引导' + (on ? '已开启' : '已关闭'))
           apply(m)
         }
       }
@@ -369,8 +381,8 @@ function showAch(sm, onClose) {
       icCol: got ? '#FFC15E' : '#9AA0C8',
       title: a.name,
       sub: a.desc,
-      tag: got ? '已解锁' : '未达成',
-      tagColor: got ? '#FFC15E' : '#9AA0C8',
+      tag: got ? '已解锁' : '+' + (a.reward || 0) + '✦',
+      tagColor: got ? '#FFC15E' : '#FFD86E',
       dim: !got
     })
   }
@@ -525,17 +537,40 @@ function showWeekly(sm, startFn, onClose) {
     })(i)
   }
   const canStart = next >= 0 && next < 5
+  const wk = weekly.weekKey()
+  const allDone = prog.done >= 5
+  const claimed = storage.weeklyRewardClaimed(wk)
+  const btns = []
+  if (allDone && !claimed) {
+    // 周奖励（E1）：5 关全完成 → 一次性领取 +30✦ 与限定称号
+    btns.push({
+      label: '领取周奖励 +30✦', primary: true,
+      onTap: function () {
+        const dust = storage.claimWeeklyReward(wk)
+        if (dust > 0) {
+          sm.toast('周奖励 +' + dust + '✦ · 获得称号「本周行者」')
+          sm.sceneModal(showWeekly(sm, startFn, onClose))
+        }
+      }
+    })
+  } else if (canStart) {
+    btns.push({ label: '挑战第 ' + (next + 1) + ' 关', primary: true, onTap: function () { startFn(next, plan[next]) } })
+  } else {
+    btns.push({ label: claimed ? '本周已完成 · 奖励已领' : '本周已完成', primary: false, onTap: null })
+  }
+  btns.push({ label: '关闭' })
+  const claimLine = claimed
+    ? L('限定称号「本周行者」已获得', { c: '#6FE3D2', s: 11.5 })
+    : (allDone ? L('周奖励待领取：+30✦ 与称号「本周行者」', { c: '#FFD86E', b: true, s: 11.5 }) : L('完成本周全部 5 关可领周奖励 +30✦', { s: 11.5, c: '#9AA0C8' }))
   return new Modal(sm, {
     title: '周挑战',
     lines: [
       L('本周 ' + weekly.weekKey() + ' · 进度 ' + prog.done + '/5 · 周一 0 点刷新', { b: true, c: '#FFC15E', s: 12.5 }),
-      L('5 个词缀关卡，全服同一布局，按顺序挑战。', { s: 11.5, c: '#9AA0C8' })
+      L('5 个词缀关卡，全服同一布局，按顺序挑战。', { s: 11.5, c: '#9AA0C8' }),
+      claimLine
     ],
     rows: rows,
-    buttons: [
-      { label: canStart ? '挑战第 ' + (next + 1) + ' 关' : '本周已完成', primary: canStart, onTap: canStart ? function () { startFn(next, plan[next]) } : null },
-      { label: '关闭' }
-    ],
+    buttons: btns,
     onClose: onClose
   })
 }

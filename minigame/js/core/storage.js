@@ -374,18 +374,19 @@ function saveStats(s) {
 
 /* ============ 成就 ============ */
 const ACHS = [
-  { id: 'first', name: '初次通关', desc: '完成你的第一关' },
-  { id: 'perfect', name: '拾光者', desc: '任意关卡全收集光点' },
-  { id: 'speed', name: '极速行者', desc: '30 关以上取得 3 星且时间达标' },
-  { id: 'boss', name: '屠龙者', desc: '通关一个 Boss 追逐关（≥80）' },
-  { id: 'pacifist', name: '赤手空拳', desc: '不使用任何道具通关一关' },
-  { id: 'daily', name: '每日达人', desc: '完成一次每日挑战' },
-  { id: 'streak', name: '坚持不懈', desc: '每日挑战连续 7 天' },
-  { id: 'dust', name: '光尘富翁', desc: '累计获得 500 光尘' },
-  { id: 'hundred', name: '百关达成', desc: '通关第 100 关（星海之巅）' },
-  { id: 'void', name: '虚空征服者', desc: '通关全部 120 关（虚空回响）' },
-  { id: 'survivor', name: '终极生存者', desc: '生存模式撑过 10 波' },
-  { id: 'hunter', name: '猎手时刻', desc: '抓住携带钥匙的宝藏 Boss' }
+  { id: 'journey', name: '旅程开始', desc: '通关第 3 关', reward: 10 },
+  { id: 'first', name: '初次通关', desc: '完成你的第一关', reward: 10 },
+  { id: 'perfect', name: '拾光者', desc: '任意关卡全收集光点', reward: 15 },
+  { id: 'speed', name: '极速行者', desc: '30 关以上取得 3 星且时间达标', reward: 20 },
+  { id: 'boss', name: '屠龙者', desc: '通关一个 Boss 追逐关（≥80）', reward: 25 },
+  { id: 'pacifist', name: '赤手空拳', desc: '不使用任何道具通关一关', reward: 20 },
+  { id: 'daily', name: '每日达人', desc: '完成一次每日挑战', reward: 10 },
+  { id: 'streak', name: '坚持不懈', desc: '每日挑战连续 7 天', reward: 30 },
+  { id: 'dust', name: '光尘富翁', desc: '累计获得 500 光尘', reward: 20 },
+  { id: 'hundred', name: '百关达成', desc: '通关第 100 关（星海之巅）', reward: 50 },
+  { id: 'void', name: '虚空征服者', desc: '通关全部 120 关（虚空回响）', reward: 100 },
+  { id: 'survivor', name: '终极生存者', desc: '生存模式撑过 10 波', reward: 25 },
+  { id: 'hunter', name: '猎手时刻', desc: '抓住携带钥匙的宝藏 Boss', reward: 25 }
 ];
 const ACH_KEY = 'maze_ach_v1';
 function getAch() {
@@ -398,17 +399,21 @@ function getAch() {
 function achList() {
   const a = getAch();
   return ACHS.map(function (x) {
-    return { id: x.id, name: x.name, desc: x.desc, unlocked: !!a[x.id] };
+    return { id: x.id, name: x.name, desc: x.desc, reward: x.reward || 0, unlocked: !!a[x.id] };
   });
 }
+// 解锁成就：新解锁时自动发放光尘奖励，返回奖励值（已解锁返回 0）
 function unlockAch(id) {
   const a = getAch();
-  if (a[id]) return false;
+  if (a[id]) return 0;
   a[id] = 1;
   try {
     wx.setStorageSync(ACH_KEY, a);
   } catch (e) {}
-  return true;
+  const def = ACHS.filter(function (x) { return x.id === id; })[0];
+  const reward = def ? (def.reward || 0) : 0;
+  if (reward > 0) addDust(reward);
+  return reward;
 }
 
 /* ============ 每日挑战 ============ */
@@ -462,9 +467,16 @@ function completeDaily(date, rec) {
     wx.setStorageSync(DAILY_KEY, d);
   } catch (e) {}
   const newAch = [];
-  if (unlockAch('daily')) newAch.push('每日达人');
-  if (streak >= 7 && unlockAch('streak')) newAch.push('坚持不懈');
-  return { better: better, streak: streak, newAch: newAch };
+  const r1 = unlockAch('daily');
+  if (r1 > 0) newAch.push('每日达人');
+  const r2 = (streak >= 7) ? unlockAch('streak') : 0;
+  if (r2 > 0) newAch.push('坚持不懈');
+  // 每日火把里程碑：连续第 3 天 +15✦，此后每满 7 天 +30✦（断签只清连击、不清总参与）
+  let bonus = 0;
+  if (streak === 3) bonus = 15;
+  else if (streak > 3 && streak % 7 === 0) bonus = 30;
+  if (bonus > 0) addDust(bonus);
+  return { better: better, streak: streak, bonus: bonus, newAch: newAch };
 }
 
 /* ============ 通关统一记录（统计 + 成就） ============ */
@@ -485,9 +497,12 @@ function recordWin(level, info) {
     if (!a[id]) {
       a[id] = 1;
       const def = ACHS.filter(function (x) { return x.id === id; })[0];
-      newAch.push({ id: id, name: def ? def.name : id });
+      const reward = def ? (def.reward || 0) : 0;
+      if (reward > 0) addDust(reward);
+      newAch.push({ id: id, name: def ? def.name : id, reward: reward });
     }
   };
+  if (level >= 3) tryU('journey');
   if (level === 1) tryU('first');
   if (info.perfect) tryU('perfect');
   if (level >= 30 && info.stars >= 3 && info.timeOK) tryU('speed');
@@ -544,6 +559,21 @@ function completeWeekLevel(weekKey, idx) {
     wx.setStorageSync(WEEK_KEY, w);
   } catch (e) {}
   return w[weekKey];
+}
+
+/* ============ 周挑战周奖励（5 关全完成 → 一次性领取） ============ */
+const WEEK_REWARD = 30;
+function weeklyRewardClaimed(weekKey) {
+  return getFlag('weekReward_' + weekKey);
+}
+// 领取周奖励：返回发放光尘（0=未全完成，-1=已领过）
+function claimWeeklyReward(weekKey) {
+  const arr = getWeeklyDone()[weekKey];
+  if (!Array.isArray(arr) || arr.length < 5 || !arr.every(function (x) { return !!x })) return 0;
+  if (weeklyRewardClaimed(weekKey)) return -1;
+  setFlag('weekReward_' + weekKey);
+  addDust(WEEK_REWARD);
+  return WEEK_REWARD;
 }
 
 /* ============ 主动技能（技能树 2.0，光尘一次性解锁） ============ */
@@ -705,6 +735,8 @@ module.exports = {
   encounterCodex: encounterCodex,
   getWeeklyDone: getWeeklyDone,
   completeWeekLevel: completeWeekLevel,
+  weeklyRewardClaimed: weeklyRewardClaimed,
+  claimWeeklyReward: claimWeeklyReward,
   SKILL_COST: SKILL_COST,
   SKILL_META: SKILL_META,
   getSkills: getSkills,

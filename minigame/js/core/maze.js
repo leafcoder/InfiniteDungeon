@@ -830,6 +830,20 @@ function placeItems(level, maze, monsters, seed) {
     items.push({ x: open[idx].x, y: open[idx].y, type: 'scroll', taken: false });
     idx++;
   }
+  // 新手教学（L2/L3）：前 5 关无道具掉落（powerCount=0），强制在出口附近放 1 个护盾，
+  // 让「捡到道具→背包→使用」链路在前 3 关内可完成
+  if (level === 2 || level === 3) {
+    let bestI = -1;
+    let bestD = 1e9;
+    for (let i = idx; i < open.length; i++) {
+      const d = Math.abs(open[i].x - maze.end.x) + Math.abs(open[i].y - maze.end.y);
+      if (d > 0 && d < bestD) { bestD = d; bestI = i; }
+    }
+    if (bestI >= 0) {
+      items.push({ x: open[bestI].x, y: open[bestI].y, type: 'shield', taken: false });
+      open.splice(bestI, 1);
+    }
+  }
   return { items: items, gemTotal: gemCount, key: keyPos };
 }
 
