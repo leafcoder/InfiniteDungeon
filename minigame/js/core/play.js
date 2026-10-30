@@ -910,16 +910,82 @@ PlayCore.prototype.revive = function () {
   this.won = false
   const px = this.state.x
   const py = this.state.y
+  // ---- 复活瞬移（反馈：原地复活会被残余怪/Boss 立即再碰到）----
+  // 死亡点若已离所有怪物 ≥6，原地复活即可；否则在「从复活点可达」的格子里
+  // 找一个离所有怪物（含 Boss）曼哈顿距离 ≥6 的随机安全格瞬移过去
+  const m = this.maze
+  const SAFE = 6
+  const key = function (x, y) { return x + ',' + y }
+  let deathMinD = 999
+  for (let i = 0; i < this.monsters.length; i++) {
+    const dd = Math.abs(this.monsters[i].x - px) + Math.abs(this.monsters[i].y - py)
+    if (dd < deathMinD) deathMinD = dd
+  }
+  let to = { x: px, y: py }
+  if (this.monsters.length && deathMinD < SAFE) {
+  const grid = m.grid
+  const H = grid.length
+  const W = grid[0].length
+  const seen = {}
+  seen[key(px, py)] = true
+  const qx = [px]
+  const qy = [py]
+  const portals = m.portals || []
+  const portalTwin = {}
+  for (let i = 0; i < portals.length; i++) portalTwin[key(portals[i].x, portals[i].y)] = portals[1 - i]
+  while (qx.length) {
+    const cx = qx.shift()
+    const cy = qy.shift()
+    const dirs = maze.getOpenDirs(grid, cx, cy, this.onewayMap)
+    for (let d = 0; d < dirs.length; d++) {
+      const nx = cx + (dirs[d] === 'L' ? -1 : dirs[d] === 'R' ? 1 : 0)
+      const ny = cy + (dirs[d] === 'U' ? -1 : dirs[d] === 'D' ? 1 : 0)
+      const nk = key(nx, ny)
+      if (!seen[nk]) { seen[nk] = true; qx.push(nx); qy.push(ny) }
+    }
+    const tw = portalTwin[key(cx, cy)]
+    if (tw && !seen[key(tw.x, tw.y)]) { seen[key(tw.x, tw.y)] = true; qx.push(tw.x); qy.push(tw.y) }
+  }
+  // 候选：可达通路格，排除出口（站上即胜，等于白给）与怪物所在格
+  const cand = []
+  let best = null
+  let bestD = -1
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (grid[y][x] !== 1 || !seen[key(x, y)]) continue
+      if (m.end && x === m.end.x && y === m.end.y) continue
+      let minD = 999
+      for (let i = 0; i < this.monsters.length; i++) {
+        const mm = this.monsters[i]
+        const dd = Math.abs(mm.x - x) + Math.abs(mm.y - y)
+        if (dd < minD) minD = dd
+      }
+      if (minD >= SAFE) cand.push({ x: x, y: y })
+      if (minD > bestD) { bestD = minD; best = { x: x, y: y } }
+    }
+  }
+  to = cand.length ? cand[Math.floor(Math.random() * cand.length)] : (best || { x: px, y: py })
+  }
+  this.state.x = to.x
+  this.state.y = to.y
+  this.state.visited[key(to.x, to.y)] = true
+  this.state.cameFrom = null
+  this.state.dir = null
+  this.visual.x = to.x
+  this.visual.y = to.y
+  // 保险：新落点近旁的非 Boss 怪仍清掉（理论上有 SAFE 距离兜底，防放置重叠）；追击态全量复位
   for (let i = this.monsters.length - 1; i >= 0; i--) {
-    const m = this.monsters[i]
-    if (m.isBoss) continue // Boss 不可清除，仅靠无敌时间拉开
-    if (Math.abs(m.x - px) + Math.abs(m.y - py) <= 4) this.monsters.splice(i, 1)
+    const mm = this.monsters[i]
+    mm.chasing = false // 复位追击态，避免全图怪带着旧目标直奔新落点（含 Boss）
+    if (mm.isBoss) continue
+    if (Math.abs(mm.x - to.x) + Math.abs(mm.y - to.y) <= 3) this.monsters.splice(i, 1)
   }
   this.bullets = []
   this.invulnUntil = this.now + 3000
   this.stepping = false
   this.waiting = true
-  this.emit('revive', { x: px, y: py })
+  this.portalCd = false // 落点若在传送门上不会立即回弹触发
+  this.emit('revive', { x: to.x, y: to.y })
 }
 
 PlayCore.prototype.spawnBullet = function (m, tx, ty) {

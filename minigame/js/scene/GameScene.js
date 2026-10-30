@@ -490,7 +490,9 @@ GameScene.prototype.handleEvent = function (ev) {
       break
     case 'revive':
       this.overlay = null
-      this.setHint('复活！3 秒无敌')
+      this.whiteFlash = 0.55
+      fx.to(this, { whiteFlash: 0 }, 400)
+      this.setHint('复活！已传送到安全点 · 3 秒无敌')
       fx.burst(this.sm.W / 2, this.sm.H / 2, { n: 22, colors: ['#6FE3D2', '#FFFFFF', '#9B8CFF'], speed: 160, size: 3, ring: true })
       this.snd('power')
       break
@@ -811,7 +813,7 @@ GameScene.prototype.onFail = function (reason) {
   if (tutDeath) {
     // 教学复活：免费原地复活（与广告复活同效），不消耗广告机会
     btns.push({
-      label: '原地复活（教学）',
+      label: '安全复活（教学）',
       primary: true,
       onTap: function () {
         self.reviveUsed = true
