@@ -907,13 +907,33 @@ function journalDetail(sm, j, back) {
 
 function copyText(text, sm) {
   // 复制必须给确定反馈（反馈：toast 说复制了但输入框里看不到）
+  // 真机偶发 setClipboardData fail（errMsg 无明确原因），fail 时自动降级：
+  // 弹 editable showModal 预填口令，用户长按文本即可唤起系统复制菜单
+  const code = String(text || '')
   try {
     wx.setClipboardData({
-      data: text,
+      data: code,
       success: function () { if (sm) sm.toast('口令已复制 ✓') },
-      fail: function () { if (sm) sm.toast('复制失败，请长按口令手动复制') }
+      fail: function (err) {
+        console.error('setClipboardData fail:', err && err.errMsg)
+        if (!sm) return
+        sm.toast('自动复制失败，长按口令手动复制')
+        try {
+          wx.showModal({
+            title: '长按口令复制',
+            content: code,
+            editable: true,
+            showCancel: false,
+            confirmText: '完成',
+            placeholderText: '长按选中上方口令 → 复制'
+          })
+        } catch (e2) {}
+      }
     })
-  } catch (e) { if (sm) sm.toast('复制失败，请长按口令手动复制') }
+  } catch (e) {
+    console.error('setClipboardData throw:', e && e.message)
+    if (sm) sm.toast('复制失败，长按口令手动复制')
+  }
 }
 
 function pasteCode(sm, startFn) {

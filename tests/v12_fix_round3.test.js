@@ -10,7 +10,7 @@ global.wx = {
   removeStorageSync: (k) => { delete mem[k]; },
   shareAppMessage: (o) => wxCalls.share.push(o),
   vibrateShort: () => {},
-  setClipboardData: (o) => { wxCalls.clipboard.push(o); if (o.success) o.success(); },
+  setClipboardData: (o) => { wxCalls.clipboard.push(o); if (wxCalls.clipFail) { if (o.fail) o.fail({ errMsg: 'setClipboardData:fail' }); } else if (o.success) o.success(); },
   getClipboardData: (o) => { if (o.success) o.success({ data: wxCalls.clipContent || '' }); },
   showModal: (o) => { wxCalls.modal.push(o); },
   createRewardedVideoAd: () => ({ show: () => Promise.reject(new Error('no ad')), onClose: () => {}, load: () => {} })
@@ -138,6 +138,17 @@ console.log('--- 反馈6：口令复制/粘贴反馈 ---');
   // 通过口令弹窗按钮触发（showCode 的粘贴按钮内部调 pasteCode）
   const m2 = Modals.showCode ? null : null;
   T('剪贴板 API 桩可用', wxCalls.clipboard.length >= 1);
+  // 复制失败降级（五轮反馈）：setClipboardData fail → 弹 editable showModal 预填口令供长按复制
+  wxCalls.clipFail = true; wxCalls.modal.length = 0; sm.toasts.length = 0;
+  const codeModal = Modals.showCode(sm, () => {}, () => {});
+  const copyBtn = codeModal.btns.find(b => b.label === '复制口令');
+  copyBtn.onTap();
+  T('fail 时 toast 提示手动复制', sm.toasts.some(t => /手动复制/.test(t)));
+  T('fail 降级弹出长按复制弹窗', wxCalls.modal.length === 1);
+  const mo = wxCalls.modal[0];
+  T('弹窗预填口令（MZ 开头 9 位）', /^MZ[0-9A-Z]{5,7}[a-z0-9]$|^MZ/.test(mo.content) && mo.content.length >= 9);
+  T('弹窗为可编辑、无取消按钮', mo.editable === true && mo.showCancel === false);
+  wxCalls.clipFail = false;
 }
 
 console.log('--- 反馈7：顶栏图标钮与光尘胶囊同线 ---');
