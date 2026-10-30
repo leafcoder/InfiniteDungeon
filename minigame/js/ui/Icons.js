@@ -143,6 +143,35 @@ function drawIcon(ctx, key, cx, cy, s, col) {
       ctx.fill()
       break
     }
+    case 'book': { // 手记：合页本 + 书脊 + 两行字
+      roundRect(ctx, -s * 0.36, -s * 0.42, s * 0.72, s * 0.84, s * 0.08)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(-s * 0.2, -s * 0.42)
+      ctx.lineTo(-s * 0.2, s * 0.42)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(-s * 0.04, -s * 0.16)
+      ctx.lineTo(s * 0.24, -s * 0.16)
+      ctx.moveTo(-s * 0.04, s * 0.06)
+      ctx.lineTo(s * 0.24, s * 0.06)
+      ctx.stroke()
+      break
+    }
+    case 'key': { // 钥匙：圆环 + 柄 + 两齿
+      ctx.beginPath()
+      ctx.arc(-s * 0.18, 0, s * 0.16, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(-s * 0.02, 0)
+      ctx.lineTo(s * 0.36, 0)
+      ctx.moveTo(s * 0.22, 0)
+      ctx.lineTo(s * 0.22, s * 0.14)
+      ctx.moveTo(s * 0.36, 0)
+      ctx.lineTo(s * 0.36, s * 0.16)
+      ctx.stroke()
+      break
+    }
     case 'lock': { // 挂锁
       ctx.beginPath()
       ctx.arc(0, -s * 0.08, s * 0.19, Math.PI, 0)

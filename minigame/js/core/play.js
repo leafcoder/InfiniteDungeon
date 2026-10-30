@@ -224,6 +224,15 @@ PlayCore.prototype.initLevel = function () {
   this._gatePhase = 0
 }
 
+// 怪物种类（图鉴计数 / 伙伴解锁数据源）：boss > shooter > patrol > chaser
+PlayCore.prototype.monsterKind = function (m) {
+  if (!m) return 'patrol'
+  if (m.isBoss) return 'boss'
+  if (m.behavior >= 2) return 'shooter'
+  if (m.path && m.path.length) return 'patrol'
+  return 'chaser'
+}
+
 // 已占用格集合（事件格放置用）：道具/暗室/单向门/闸门/传送门
 PlayCore.prototype.occupiedCells = function () {
   const used = {}
@@ -627,7 +636,7 @@ PlayCore.prototype.updateMonsters = function (now) {
         m.chasing = true
         if (!m._alerted) {
           m._alerted = true
-          this.emit('alert', { x: m.x, y: m.y })
+          this.emit('alert', { x: m.x, y: m.y, kind: this.monsterKind(m) })
         }
         if (m.behavior >= 2) {
           m.shootCd -= 1
@@ -819,7 +828,7 @@ PlayCore.prototype.startWave = function (n) {
     }
     this.monsters.push(m)
     made++
-    this.emit('alert', { x: c.x, y: c.y })
+    this.emit('alert', { x: c.x, y: c.y, kind: this.monsterKind(m) })
   }
   if (n > 1) {
     const cells = this.findFarCells(px, py, 4, 1)

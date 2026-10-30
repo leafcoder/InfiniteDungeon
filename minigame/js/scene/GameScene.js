@@ -54,6 +54,7 @@ GameScene.prototype.enter = function (params) {
   this.level = Math.max(1, Math.min(params.level || 1, storage.TOTAL))
   this.mods = params.mods || []
   this.seed = params.seed
+  this.code = params.code || null // 挑战口令原文（本口令最佳纪录用）
   if (this.mode === 'daily' && !this.seed) this.seed = storage.dailySeed()
   this.hudH = (this.sm.sat || 0) + 92 * u
   this.view = {
@@ -68,6 +69,9 @@ GameScene.prototype.enter = function (params) {
   this._prevVis = null        // 上一帧玩家位置，用于检测瞬移跳变
   this.reviveUsed = false
   this.buildCore()
+  // 怪物伙伴（N8）：遭遇满 10 次的怪物结伴同行（纯展示）
+  this.partner = storage.getPartner()
+  this._pTrail = null
   this.snapCamera() // 开局镜头直接对齐玩家，避免开场长平移
   this.overlay = null
   this.backBtn = null
@@ -113,16 +117,24 @@ GameScene.prototype.enter = function (params) {
 GameScene.prototype.buildCore = function () {
   const self = this
   const skillOwned = storage.getSkills()
+  const trait = storage.getHeroTrait()
+  // 熔核余温（lava 特性）：Boss 追逐关步频 +5%
+  let stepMul = storage.stepMul()
+  if (trait && trait.bossStep && this.level >= 80) stepMul *= trait.bossStep
   const core = new PlayCore(this.level, {
     aspect: this.view.bh / this.view.bw,
     seed: this.seed,
     mods: this.mods,
     survival: this.mode === 'survival',
     fxDur: function (t) { return storage.fxDuration(t) },
-    stepMul: storage.stepMul()
+    stepMul: stepMul
   })
   // 拾光天赋：迷雾视野半径放大（revealAround 运行时读取 viewMul）
   core.viewMul = storage.viewMul()
+  // 渊视（abyssal 特性）：迷雾关火把视野 +8%
+  if (trait && trait.view && this.level >= 41) core.viewMul *= trait.view
+  // 樱盾（sakura 特性）：开局 2 秒无敌
+  if (trait && trait.invuln) core.invulnUntil = Math.max(core.invulnUntil || 0, core.now + trait.invuln)
   // 技能每局次数（已解锁才可用）
   core.skillUses = { dash: skillOwned.dash ? 3 : 0, insight: skillOwned.insight ? 2 : 0 }
   core.useSkill = function (k) {
@@ -414,6 +426,8 @@ GameScene.prototype.handleEvent = function (ev) {
       fx.shake(2.5, 0.2)
       this.snd('alert')
       try { storage.encounterCodex('m_alert') } catch (e) {}
+      // 怪物分类遭遇计数（伙伴解锁数据源）
+      if (d.kind) { try { storage.encounterCodex('m_' + d.kind) } catch (e) {} }
       break
     case 'skill':
       fx.shake(3, 0.18)
@@ -508,9 +522,69 @@ GameScene.prototype.computeExplore = function (st) {
   for (let i = 0; i < parts.length; i++) wsum += parts[i].w
   if (wsum <= 0) return { score: 100, medal: 3 }
   for (let i = 0; i < parts.length; i++) sc += parts[i].r * parts[i].w
-  const score = Math.round((sc / wsum) * 100)
+  // 旅人直觉（rover 特性）：探索度评价 +3 分
+  const trait = storage.getHeroTrait()
+  const score = Math.min(100, Math.round((sc / wsum) * 100) + (trait && trait.explore ? trait.explore : 0))
   const medal = score >= 85 ? 3 : score >= 65 ? 2 : score >= 40 ? 1 : 0
   return { score: score, medal: medal }
+}
+
+// 怪物伙伴：落后小人约 0.6 格的跟随点，指数趋近 + 上下轻晃
+GameScene.prototype.drawPartner = function (ctx, u) {
+  const core = this.core
+  if (!core || core.won || !core.state) return
+  const L = computeLayout(core, this.view)
+  const tx = L.ox + (core.state.x + 0.5) * L.cs
+  const ty = L.oy + (core.state.y + 0.5) * L.cs
+  if (!this._pTrail) this._pTrail = { x: tx, y: ty }
+  const tr = this._pTrail
+  tr.x += (tx - tr.x) * 0.06
+  tr.y += (ty - tr.y) * 0.06
+  let dx = tr.x - tx
+  let dy = tr.y - ty
+  const d = Math.sqrt(dx * dx + dy * dy) || 1
+  const minD = L.cs * 0.62
+  if (d < minD) {
+    dx = (dx / d) * minD
+    dy = (dy / d) * minD
+  }
+  const px = tx + dx
+  const py = ty + dy + Math.sin(Date.now() / 260) * 2.2 * u
+  ctx.save()
+  ctx.globalAlpha = 0.92
+  ctx.font = Math.round(L.cs * 0.34) + 'px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(this.partner.meta.emoji, px, py)
+  ctx.restore()
+}
+
+// 一局结束后的默认去向：周挑战进下一关，其余下一关/重试
+GameScene.prototype.afterRound = function (isWin) {
+  if (isWin && this.mode === 'weekly' && this.weekIdx < 4) {
+    const plan = weekly.getPlan()
+    const nxt = plan[this.weekIdx + 1]
+    this.enter({ level: nxt.level, mode: 'weekly', weekIdx: this.weekIdx + 1, mods: nxt.mods })
+    return
+  }
+  const nxt = isWin ? Math.min(this.level + 1, storage.TOTAL) : this.level
+  this.enter({ level: nxt, mode: this.mode, weekIdx: this.weekIdx, mods: this.mods, seed: this.mode === 'daily' ? storage.dailySeed() : this.seed, code: this.code })
+}
+
+// 分享战绩（E3）：拉起微信分享；开发环境降级为提示文案
+GameScene.prototype.shareWin = function (st, stars) {
+  let what = '第 ' + this.level + ' 关'
+  if (this.mode === 'daily') what = '今日挑战'
+  else if (this.mode === 'custom') what = '口令挑战 ' + (this.code || '')
+  const title = '我在「无尽地宫」通关' + what + ' ' + '★'.repeat(stars) + ' 用时 ' + st.time + 's，敢来挑战吗？'
+  try {
+    if (typeof wx !== 'undefined' && wx.shareAppMessage) {
+      wx.shareAppMessage({ title: title })
+      this.setHint('已发起分享')
+      return
+    }
+  } catch (e) {}
+  this.setHint(title)
 }
 
 GameScene.prototype.onWin = function (st) {
@@ -524,7 +598,8 @@ GameScene.prototype.onWin = function (st) {
   let extra = []
   try {
     if (this.mode === 'daily') {
-      dustEarn = Math.max(3, st.gems)
+      const trait = storage.getHeroTrait()
+      dustEarn = Math.round(Math.max(3, st.gems) * (trait && trait.daily ? trait.daily : 1))
       const info = storage.completeDaily(storage.dailyKey(), { time: st.time, steps: st.steps, swipe: st.swipe, stars: stars, gems: st.gems, gemTotal: st.gemTotal })
       if (info && info.better) extra.push('破纪录！')
       if (info && info.bonus > 0) extra.push('🔥 连续 ' + info.streak + ' 天 +' + info.bonus + '✦')
@@ -538,6 +613,11 @@ GameScene.prototype.onWin = function (st) {
     } else if (this.mode === 'custom') {
       dustEarn = Math.max(1, st.gems)
       extra.push('挑战完成')
+      // 本口令最佳纪录（E2）
+      if (this.code) {
+        const best = storage.recordCodeBest(this.code, st.time)
+        extra.push(best.improved ? ('🏅 刷新本口令纪录 ' + st.time + 's') : ('本口令最佳 ' + best.time + 's'))
+      }
     } else {
       const firstClear = !storage.getProgress().completed[this.level]
       dustEarn = Math.round((firstClear ? st.gems : Math.max(1, Math.floor(st.gems / 2))) * storage.gemValueMul())
@@ -567,11 +647,17 @@ GameScene.prototype.onWin = function (st) {
   } catch (e) {
     dustEarn = dustEarn || 0
   }
+  const self = this
   this.buildOverlay('win', {
     title: '通关！' + '★'.repeat(stars) + '☆'.repeat(3 - stars),
     lines: [
       '用时 ' + st.time + 's · 步数 ' + st.steps + '/' + best,
       '光尘 +' + dustEarn + '✦（' + st.gems + '/' + st.gemTotal + '）' + extra.join(' ')
+    ],
+    btns: [
+      { label: this.mode === 'weekly' && this.weekIdx < 4 ? '下一关' : '继续', onTap: function () { self.afterRound(true) } },
+      { label: '分享战绩', onTap: function () { self.shareWin(st, stars) } },
+      { label: '返回首页', onTap: function () { self.sm.switch('home') } }
     ]
   })
 }
@@ -663,20 +749,7 @@ GameScene.prototype.buildOverlay = function (type, info) {
   const H = this.sm.H
   const self = this
   const defs = info.btns || [
-    {
-      label: type === 'win' ? '下一关' : '再试一次',
-      onTap: function () {
-        const isWin = type === 'win'
-        if (isWin && self.mode === 'weekly' && self.weekIdx < 4) {
-          const plan = weekly.getPlan()
-          const nxt = plan[self.weekIdx + 1]
-          self.enter({ level: nxt.level, mode: 'weekly', weekIdx: self.weekIdx + 1, mods: nxt.mods })
-          return
-        }
-        const nxt = isWin ? Math.min(self.level + 1, storage.TOTAL) : self.level
-        self.enter({ level: nxt, mode: self.mode, weekIdx: self.weekIdx, mods: self.mods, seed: self.mode === 'daily' ? storage.dailySeed() : self.seed })
-      }
-    },
+    { label: type === 'win' ? '下一关' : '再试一次', onTap: function () { self.afterRound(type === 'win') } },
     { label: '返回首页', onTap: function () { self.sm.switch('home') } }
   ]
   // 按钮自适应布局：≤2 个一行；≥3 个时主按钮独占一行，其余第二行
@@ -759,6 +832,9 @@ GameScene.prototype.draw = function (ctx) {
     ctx.fill()
     ctx.restore()
   }
+
+  // 怪物伙伴（N8）：跟在小人身后轻晃（纯展示零数值）
+  if (this.partner) this.drawPartner(ctx, u)
   ctx.restore() // 震屏结束（弹层不震）
 
   // 棋盘上层的右侧控件（返回/玩法/指南针/技能/背包）：

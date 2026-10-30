@@ -126,6 +126,9 @@ function buildHeroRows(sm, refresh) {
     let sub = h.desc
     if (!avail && h.by === 'stars') sub += '（当前 ' + stats.stars + ' 星）'
     if (!avail && h.by === 'clears') sub += '（当前 ' + stats.clears + ' 关）'
+    // 英雄微特性（N5）：随身天赋，换装即生效
+    const trait = storage.HERO_TRAITS[h.id]
+    if (trait) sub += ' · 特性「' + trait.name + '」' + trait.desc
     return {
       hero: h.pal,            // 英雄小人 chip（调色板驱动），比抽象图标更直观
       icCol: h.pal.tunic,
@@ -433,6 +436,30 @@ function showAch(sm, onClose) {
     tag: itemN >= 8 ? '百宝箱' : '收集中',
     tagColor: itemN >= 8 ? '#6FE3D2' : '#9AA0C8'
   })
+  // 怪物伙伴（N8）：某类怪物遭遇满 10 次 → 结伴同行
+  const partner = storage.getPartner()
+  const pProg = storage.partnerProgress()
+  const pNext = pProg.filter(function (p) { return !p.unlocked; })
+    .sort(function (a, b) { return b.count - a.count; })[0]
+  rows.push({
+    ick: 'monster',
+    icCol: '#FF7A92',
+    title: partner ? ('伙伴同行：' + partner.meta.emoji + ' ' + partner.meta.name) : '怪物伙伴 · 待结缘',
+    sub: partner ? partner.meta.desc : (pNext ? ('「' + pNext.meta.name + '」遭遇 ' + pNext.count + '/' + storage.PARTNER_NEED + ' 次即结伴') : '与怪物照面累计 ' + storage.PARTNER_NEED + ' 次即结伴'),
+    tag: partner ? '同行中' : '未结缘',
+    tagColor: partner ? '#FFC15E' : '#9AA0C8'
+  })
+  // 旅人手记（N10）：分区首通 + 制霸解锁的轻剧情
+  const jr = storage.journalList().filter(function (j) { return j.unlocked; }).length
+  rows.push({
+    ick: 'book',
+    icCol: '#9B8CFF',
+    title: '旅人手记 ' + jr + '/12 段',
+    sub: '地宫为何沉没，火把从哪来 · 点开阅读',
+    tag: '阅读 ›',
+    tagColor: '#9B8CFF',
+    onTap: function () { sm.sceneModal(showJournal(sm, onClose)) }
+  })
   return new Modal(sm, {
     title: '成就图鉴',
     lines: [
@@ -640,6 +667,32 @@ function showCode(sm, startFn, onClose) {
       })
     })
     const code = challenge.encode(state.tpl, state.mods, state.seed)
+    // 口令历史（E2）：最近 5 条，点按查看重玩/删除
+    const hist = storage.getCodeHist()
+    if (hist.length) {
+      rows.push({ header: '口令历史 · 最近 5 条' })
+      hist.forEach(function (c) {
+        const dec = challenge.decode(c)
+        let sub = '口令已失效'
+        if (dec) {
+          const tpl = challenge.TEMPLATES.find(function (t) { return t.level === dec.level })
+          sub = (tpl ? tpl.name : '第 ' + dec.level + ' 关') + (dec.mods.length ? ' · 词缀×' + dec.mods.length : '')
+        }
+        rows.push({
+          ick: 'key',
+          icCol: '#FFD86E',
+          title: c,
+          sub: sub,
+          tag: '重玩 ›',
+          tagColor: '#6FE3D2',
+          dim: !dec,
+          onTap: function () {
+            if (!dec) return
+            sm.sceneModal(codeHistoryDetail(sm, startFn, c, dec, function () { sm.sceneModal(build()) }))
+          }
+        })
+      })
+    }
     const opts = {
       title: '挑战码',
       lines: [
@@ -650,6 +703,7 @@ function showCode(sm, startFn, onClose) {
       buttons: [
         { label: '复制口令', primary: true, onTap: function () {
           copyText(code)
+          storage.addCodeHist(code)
           sm.toast('口令已复制，去发给好友吧')
         } },
         { label: '粘贴口令', onTap: function () { pasteCode(sm, startFn) } },
@@ -664,6 +718,84 @@ function showCode(sm, startFn, onClose) {
   return build()
 }
 
+// 口令成功进入统一入口：记历史 + 携带口令原文（本口令最佳纪录用）
+function goCode(sm, startFn, raw) {
+  const dec = challenge.decode(raw)
+  if (!dec) return false
+  const code = String(raw).trim().toUpperCase()
+  storage.addCodeHist(code)
+  dec.code = code
+  startFn(dec)
+  return true
+}
+
+// 口令历史条目详情：重玩 / 删除
+function codeHistoryDetail(sm, startFn, code, dec, back) {
+  return new Modal(sm, {
+    title: '口令 ' + code,
+    lines: [
+      L('模板：第 ' + dec.level + ' 关 · 词缀 ' + (dec.mods.length ? dec.mods.join('、') : '无'), { s: 12, c: '#FFC15E' }),
+      L('开始挑战后自动记录本口令最佳用时。', { s: 11, c: '#9AA0C8' })
+    ],
+    buttons: [
+      { label: '重玩', primary: true, onTap: function () { back(); goCode(sm, startFn, code) } },
+      { label: '删除', onTap: function () { storage.removeCodeHist(code); back(); sm.toast('已从历史移除') } },
+      { label: '返回', onTap: function () { back() } }
+    ]
+  })
+}
+
+/* ---------- 旅人手记（N10） ---------- */
+
+const JOURNAL_ZONES = ['入门森林', '迷雾峡谷', '流光回廊', '熔岩深渊', '星海之巅', '虚空回响']
+
+function showJournal(sm, onClose) {
+  const list = storage.journalList()
+  const rows = []
+  let lastZone = -1
+  list.forEach(function (j) {
+    if (j.zone !== lastZone) {
+      lastZone = j.zone
+      rows.push({ header: JOURNAL_ZONES[j.zone] || ('第 ' + (j.zone + 1) + ' 区') })
+    }
+    const isMaster = j.kind === 'master'
+    rows.push({
+      ick: j.unlocked ? 'book' : 'lock',
+      icCol: j.unlocked ? (isMaster ? '#FFC15E' : '#9B8CFF') : '#9AA0C8',
+      title: j.unlocked ? j.title : '？？？',
+      sub: j.unlocked ? (isMaster ? '制霸后解锁的篇章 · 点开阅读' : '首次踏入的记录 · 点开阅读') : (isMaster ? '通关该分区全部 20 关解锁' : '踏入该分区任意一关解锁'),
+      tag: j.unlocked ? '阅读 ›' : '🔒',
+      tagColor: j.unlocked ? '#9B8CFF' : '#9AA0C8',
+      dim: !j.unlocked,
+      onTap: j.unlocked ? function () { sm.sceneModal(journalDetail(sm, j, function () { sm.sceneModal(showJournal(sm, onClose)) })) } : null
+    })
+  })
+  return new Modal(sm, {
+    title: '旅人手记',
+    lines: [
+      L('地宫为何沉没？火把从哪来？', { b: true, c: '#9B8CFF', s: 13 }),
+      L('每分区首通与制霸各解锁一段，共 12 段。', { s: 11, c: '#9AA0C8' })
+    ],
+    rows: rows,
+    buttons: [{ label: '关闭', onTap: null }],
+    onClose: onClose
+  })
+}
+
+function journalDetail(sm, j, back) {
+  return new Modal(sm, {
+    title: j.title,
+    lines: [
+      L(JOURNAL_ZONES[j.zone] + ' · ' + (j.kind === 'master' ? '制霸' : '首通'), { s: 11, c: '#9B8CFF', ac: 'center' }),
+      { t: j.text, s: 12.5, c: '#F3F1FF', gap: true }
+    ],
+    buttons: [
+      { label: '返回目录', primary: true, onTap: function () { back() } },
+      { label: '关闭', onTap: null }
+    ]
+  })
+}
+
 function copyText(text) {
   try {
     wx.setClipboardData({ data: text })
@@ -674,9 +806,7 @@ function pasteCode(sm, startFn) {
   try {
     wx.getClipboardData({
       success: function (res) {
-        const dec = challenge.decode(res.data)
-        if (!dec) { sm.toast('剪贴板没有有效口令，可手动输入'); manualInput(sm, startFn); return }
-        startFn(dec)
+        if (!goCode(sm, startFn, res.data)) { sm.toast('剪贴板没有有效口令，可手动输入'); manualInput(sm, startFn) }
       },
       fail: function () { manualInput(sm, startFn) }
     })
@@ -695,9 +825,7 @@ function manualInput(sm, startFn) {
       placeholderText: '粘贴或输入 MZ 开头的 9 位口令',
       success: function (res) {
         if (!res.confirm) return
-        const dec = challenge.decode(res.content || '')
-        if (!dec) { sm.toast('口令无效：应为 MZ 开头的 9 位码'); return }
-        startFn(dec)
+        if (!goCode(sm, startFn, res.content || '')) { sm.toast('口令无效：应为 MZ 开头的 9 位码'); return }
       }
     })
   } catch (e) {
@@ -714,5 +842,6 @@ module.exports = {
   showDaily: showDaily,
   showWeekly: showWeekly,
   showCode: showCode,
+  showJournal: showJournal,
   pasteCode: pasteCode
 }

@@ -121,6 +121,20 @@ const HEROES = [
   }
 ];
 
+// 英雄微特性（N5）：每款 1 条轻特性，强化收集意义；数值刻意压低不卖数值
+const HERO_TRAITS = {
+  rover:   { name: '旅人直觉', desc: '探索度评价 +3 分', explore: 3 },
+  mint:    { name: '薄荷清爽', desc: '道具效果时长 +10%', fxDur: 1.10 },
+  sunset:  { name: '霞光馈赠', desc: '光尘结算 +5%', gem: 1.05 },
+  abyssal: { name: '渊视', desc: '迷雾关火把视野 +8%', view: 1.08 },
+  sakura:  { name: '樱盾', desc: '开局 2 秒无敌', invuln: 2000 },
+  lava:    { name: '熔核余温', desc: 'Boss 追逐关步频 +5%', bossStep: 0.95 },
+  royal:   { name: '贵胄礼遇', desc: '每日挑战光尘 +10%', daily: 1.10 }
+};
+function getHeroTrait() {
+  return HERO_TRAITS[getHero()] || null;
+}
+
 // 累计星级 / 通关数（英雄解锁条件的数据源）
 function heroStats() {
   const p = getProgress();
@@ -253,7 +267,9 @@ function buyUpgrade(k) {
 function fxDuration(k) {
   const u = getUpgrades();
   const base = UPG_BASE[k] + (UPG_DELTA[k] || 0) * (u[k] || 0);
-  return Math.round(base * (1 + 0.04 * (getTalents().guard || 0)) * 100) / 100;
+  const tr = HERO_TRAITS[getHero()];
+  const heroMul = tr && tr.fxDur ? tr.fxDur : 1;
+  return Math.round(base * (1 + 0.04 * (getTalents().guard || 0)) * heroMul * 100) / 100;
 }
 
 // ---------------- 旅人之路（N7 局外天赋树） ----------------
@@ -293,9 +309,11 @@ function buyTalent(k) {
   return true;
 }
 
-// 拾光：光尘结算倍率
+// 拾光：光尘结算倍率（落霞行者特性再 +5%）
 function gemValueMul() {
-  return 1 + 0.02 * (getTalents().gather || 0);
+  const tr = HERO_TRAITS[getHero()];
+  const heroMul = tr && tr.gem ? tr.gem : 1;
+  return (1 + 0.02 * (getTalents().gather || 0)) * heroMul;
 }
 // 拾光：迷雾视野倍率（PlayCore.revealAround 乘算）
 function viewMul() {
@@ -620,7 +638,7 @@ function recordWin(level, info) {
   return newAch;
 }
 
-/* ============ 图鉴（遭遇即解锁） ============ */
+/* ============ 图鉴（遭遇即解锁 + 计数，伙伴解锁数据源） ============ */
 const CODEX_KEY = 'maze_codex_v1';
 function getCodex() {
   try {
@@ -630,15 +648,114 @@ function getCodex() {
     return {};
   }
 }
-// 记录一次遭遇；首次遭遇返回 true（图鉴新增）
+// 记录一次遭遇（累计计数）；首次遭遇返回 true（图鉴新增）
 function encounterCodex(key) {
   const c = getCodex();
-  if (c[key]) return false;
-  c[key] = 1;
+  const first = !c[key];
+  c[key] = (c[key] || 0) + 1;
   try {
     wx.setStorageSync(CODEX_KEY, c);
   } catch (e) {}
-  return true;
+  return first;
+}
+function codexCount(key) {
+  return getCodex()[key] || 0;
+}
+
+/* ============ 怪物伙伴（N8）：某类怪物遭遇满 10 次 → 结伴同行（纯展示） ============ */
+const PARTNER_NEED = 10;
+const PARTNER_META = {
+  patrol:  { name: '巡影狼崽', emoji: '🐺', desc: '巡逻怪 · 地宫里的老住户' },
+  chaser:  { name: '追风蝠', emoji: '🦇', desc: '视线追击怪 · 认准了就不撒手' },
+  shooter: { name: '窥视之眼', emoji: '👁️', desc: '射击怪 · 远远盯着你的那一个' },
+  boss:    { name: '地宫魔王', emoji: '👹', desc: 'Boss · 折服于你的逃脱技巧' }
+};
+function getPartner() {
+  // 按解锁难度从低到高取第一个达成 10 次的怪物类型
+  const order = ['patrol', 'chaser', 'shooter', 'boss'];
+  for (let i = 0; i < order.length; i++) {
+    const n = codexCount('m_' + order[i]);
+    if (n >= PARTNER_NEED) return { key: order[i], count: n, meta: PARTNER_META[order[i]] };
+  }
+  return null;
+}
+function partnerProgress() {
+  // 图鉴展示：四种怪物的遭遇进度
+  const order = ['patrol', 'chaser', 'shooter', 'boss'];
+  return order.map(function (k) {
+    return { key: k, count: codexCount('m_' + k), meta: PARTNER_META[k], unlocked: codexCount('m_' + k) >= PARTNER_NEED };
+  });
+}
+
+/* ============ 旅人手记（N10）：分区首通 + 制霸各解锁一段轻剧情 ============ */
+const JOURNAL = [
+  { zone: 0, kind: 'clear', title: '第一缕火光', text: '听说每个走进地宫的人，手里都提着同一盏灯。没人知道灯是谁挂的，也没人见过挂灯的人。你拨开藤蔓，火光在石壁上晃出细长的影子——影子比你先一步，往深处去了。' },
+  { zone: 0, kind: 'master', title: '森林的低语', text: '走完这片森林才发现，树根不是长在地里的，是从地宫的砖缝里钻出来的。它们在这里生活了很久，久到忘记了天上是什么样子。你拍了拍最粗的那条根，它轻轻颤了一下，像是在道别。' },
+  { zone: 1, kind: 'clear', title: '雾从何处来', text: '峡谷的雾有味道，像旧书页混着铁锈。老旅人说，雾是地宫的呼吸——它睡着了，呼吸就重。你把火把举高些，雾退开一步，又慢慢围拢上来，像好奇，又像挽留。' },
+  { zone: 1, kind: 'master', title: '峡谷的守灯人', text: '走出峡谷那晚，你在雾里看见一个提灯的背影，走得不快，每一步都踩在你踩过的石头上。你想追，雾却散了。后来你才明白：那是每一个走完峡谷的人，都会替下一个人留下的路。' },
+  { zone: 2, kind: 'clear', title: '回廊的灯为何还亮', text: '流光回廊的灯亮了几百年，没有油，没有芯，也没有人添。石壁上的刻痕写着同一句话：光不灭，是因为还有人要走这条路。你伸手碰了碰灯座，光晃了晃，像在点头。' },
+  { zone: 2, kind: 'master', title: '镜子里的旅人', text: '回廊尽头有一面旧镜，照出的不是你，是很多个提灯的背影——他们走同一个方向，脚步声连成一条河。你朝镜子挥挥手，河里所有的背影都停了一瞬，然后一起挥了挥手。' },
+  { zone: 3, kind: 'clear', title: '深渊的心跳', text: '熔岩深渊的地是暖的，隔几秒会轻轻一颤，像心跳。老旅人说那不是地脉，是地宫在做梦。梦里它还是一座城，街上有人，窗里有灯。你踩着它的梦走过去，尽量放轻了脚步。' },
+  { zone: 3, kind: 'master', title: '不灭的炉火', text: '深渊最深处有一座冷掉的炉子，炉膛里留着半块没烧完的柴。你把火把凑近，柴又烧了起来。火光照亮炉边的刻字：愿后来的人，都有一口热饭。你坐下来，把干粮烤热了才走。' },
+  { zone: 4, kind: 'clear', title: '把星星踩在脚下', text: '星海之巅没有路，只有一片会流动的星光。旅人手册上写：别信眼睛，信脚下的凉意——星星是虚的，石头是真的。你走出第一步时，整片星海晃了一下，像被踩醒的水面。' },
+  { zone: 4, kind: 'master', title: '灯塔与回信', text: '山顶有一座熄灭的灯塔。你把火把放进灯室的那一刻，整片星海亮了，光顺着来时的路铺回去，一直铺到入口。听说走夜路的新旅人都看见过这道光，他们说：那是有人先走到了山顶。' },
+  { zone: 5, kind: 'clear', title: '回响是什么', text: '虚空回响里没有怪物的咆哮，只有你自己的脚步声——比你慢半拍，从很远的地方跟上来。你停下，它也停下。你笑，它隔了一拍才笑。这里回响的不是声音，是你走过的每一步。' },
+  { zone: 5, kind: 'master', title: '归途', text: '走出第 120 关的时候，你手里的灯忽然轻了。低头看，灯还在，火却变成了一颗小小的、温热的光。你终于明白：地宫从来不想留住谁，它只是想确认——每一个走进来的人，都能带着光走出去。' }
+];
+function journalList() {
+  const prog = getProgress();
+  const completed = prog.completed || {};
+  return JOURNAL.map(function (j, idx) {
+    const start = j.zone * 20 + 1;
+    let clear = false;
+    let master = true;
+    for (let lv = start; lv < start + 20; lv++) {
+      if (completed[lv]) clear = true;
+      else master = false;
+    }
+    return {
+      idx: idx,
+      zone: j.zone,
+      kind: j.kind,
+      title: j.title,
+      text: j.text,
+      unlocked: j.kind === 'clear' ? clear : (clear && master)
+    };
+  });
+}
+
+/* ============ 口令历史（E2）：最近 5 条 + 本口令最佳纪录 ============ */
+const CODE_HIST_KEY = 'maze_codehist_v1';
+const CODE_BEST_KEY = 'maze_codebest_v1';
+function getCodeHist() {
+  try {
+    const h = wx.getStorageSync(CODE_HIST_KEY);
+    return Array.isArray(h) ? h : [];
+  } catch (e) {
+    return [];
+  }
+}
+function addCodeHist(code) {
+  if (!code) return;
+  let h = getCodeHist().filter(function (c) { return c !== code; });
+  h.unshift(code);
+  h = h.slice(0, 5);
+  try { wx.setStorageSync(CODE_HIST_KEY, h); } catch (e) {}
+}
+function removeCodeHist(code) {
+  try { wx.setStorageSync(CODE_HIST_KEY, getCodeHist().filter(function (c) { return c !== code; })); } catch (e) {}
+}
+// 本口令最佳用时（秒，取最小）；返回 {time, improved}
+function recordCodeBest(code, time) {
+  let best = {};
+  try {
+    const b = wx.getStorageSync(CODE_BEST_KEY);
+    if (b && typeof b === 'object') best = b;
+  } catch (e) {}
+  const improved = !best[code] || time < best[code];
+  if (improved) best[code] = time;
+  try { wx.setStorageSync(CODE_BEST_KEY, best); } catch (e) {}
+  return { time: best[code], improved: improved };
 }
 
 /* ============ 周挑战（按周重置的 5 个 mod 关卡） ============ */
@@ -814,6 +931,19 @@ module.exports = {
   buyHero: buyHero,
   getHeroPal: getHeroPal,
   getHeroCollected: getHeroCollected,
+  getHeroTrait: getHeroTrait,
+  HERO_TRAITS: HERO_TRAITS,
+  encounterCodex: encounterCodex,
+  codexCount: codexCount,
+  getPartner: getPartner,
+  partnerProgress: partnerProgress,
+  PARTNER_META: PARTNER_META,
+  PARTNER_NEED: PARTNER_NEED,
+  journalList: journalList,
+  getCodeHist: getCodeHist,
+  addCodeHist: addCodeHist,
+  removeCodeHist: removeCodeHist,
+  recordCodeBest: recordCodeBest,
   getUpgrades: getUpgrades,
   buyUpgrade: buyUpgrade,
   TALENT_META: TALENT_META,
@@ -845,7 +975,6 @@ module.exports = {
   completeDaily: completeDaily,
   recordWin: recordWin,
   getCodex: getCodex,
-  encounterCodex: encounterCodex,
   getWeeklyDone: getWeeklyDone,
   completeWeekLevel: completeWeekLevel,
   weeklyRewardClaimed: weeklyRewardClaimed,

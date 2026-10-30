@@ -162,6 +162,8 @@ HomeScene.prototype.enter = function () {
       success: function (res) {
         const dec = challenge.decode(res.data)
         if (!dec || !dec.level) return
+        const code = String(res.data).trim().toUpperCase()
+        storage.addCodeHist(code) // 口令历史（E2）
         const names = (dec.mods || []).map(function (mk) {
           for (let j = 0; j < weekly.MODS.length; j++) if (weekly.MODS[j].key === mk) return weekly.MODS[j].name
           return mk
@@ -175,7 +177,7 @@ HomeScene.prototype.enter = function () {
           buttons: [
             { label: '接受挑战', primary: true, onTap: function () {
               self.modal = null
-              self.sm.switch('game', { mode: 'custom', level: dec.level, mods: dec.mods, seed: dec.seed })
+              self.sm.switch('game', { mode: 'custom', level: dec.level, mods: dec.mods, seed: dec.seed, code: code })
             } },
             { label: '忽略' }
           ]
@@ -242,7 +244,7 @@ HomeScene.prototype.openEntry = function (key) {
   } else if (key === 'code') {
     this.modal = Modals.showCode(this.sm, function (dec) {
       self.modal = null
-      self.sm.switch('game', { mode: 'custom', level: dec.level, mods: dec.mods, seed: dec.seed })
+      self.sm.switch('game', { mode: 'custom', level: dec.level, mods: dec.mods, seed: dec.seed, code: dec.code })
     }, function () { self.modal = null })
   } else if (key === 'survival') {
     if (!storage.getFlag('survTut')) {
@@ -705,6 +707,18 @@ HomeScene.prototype.drawHero = function (ctx, v) {
   ctx.font = Math.round(10.5 * u) + 'px sans-serif'
   ctx.textAlign = 'right'
   ctx.fillText('已通关 ' + done + '/20', h.x + h.w - 56 * u, by + 18 * u)
+
+  // 怪物伙伴（N8）：结伴的怪物在卡上随行轻晃（纯展示）
+  const partner = storage.getPartner()
+  if (partner) {
+    ctx.save()
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.globalAlpha = e * 0.95
+    ctx.font = Math.round(17 * u) + 'px sans-serif'
+    ctx.fillText(partner.meta.emoji, h.x + 24 * u, by + 3 * u + Math.sin(Date.now() / 420) * 1.6 * u)
+    ctx.restore()
+  }
 
   // 徽章：状态指示（锁定 / 进行中 / 已通关）—— 右上角状态标，与左侧「第 X–Y 关」文案分离，文字在容器内垂直居中
   ctx.textAlign = 'left'
