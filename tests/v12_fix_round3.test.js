@@ -85,11 +85,22 @@ console.log('--- 反馈3：职业皮肤 ---');
   storage.unlockHero('mage');
   storage.setHero('mage');
   T('getHeroPal 带 outfit=wizard', storage.getHeroPal().outfit === 'wizard');
-  // 绘制桩：drawHeroChip 五款全画一遍不抛错
+  // 绘制桩：drawHeroChip 五款全画一遍不抛错（带 outfit 注入，覆盖配件绘制路径）
   const ctxStub = { save(){}, restore(){}, translate(){}, beginPath(){}, arc(){}, arcTo(){}, fill(){}, stroke(){}, fillRect(){}, moveTo(){}, lineTo(){}, quadraticCurveTo(){}, closePath(){}, ellipse(){}, scale(){} };
   let ok = true;
-  storage.HEROES.forEach(h => { try { Icons.drawHeroChip(ctxStub, h.pal, 0, 0, 10); } catch (e) { ok = false; console.log('    ' + h.id + ': ' + e.message); } });
+  storage.HEROES.forEach(h => { try { Icons.drawHeroChip(ctxStub, Object.assign({}, h.pal, { outfit: h.outfit || 'rover' }), 0, 0, 10); } catch (e) { ok = false; console.log('    ' + h.id + ': ' + e.message); } });
   T('五款职业皮肤 drawHeroChip 绘制不抛错', ok);
+  // 弹窗行卡 hero 调色板必须带 outfit（此前漏注入 → 弹窗小人缺职业配件，与游戏内对不上）
+  const sm = makeSM();
+  const skinModal = Modals.showSkin(sm, () => {});
+  const heroRows = skinModal.rows.filter(r => r.hero);
+  T('皮肤弹窗英雄行数量 = HEROES 数', heroRows.length === storage.HEROES.length);
+  T('每行 hero.outfit 与英雄配置一致', storage.HEROES.every(h => {
+    const row = heroRows.find(r => r.title.indexOf(h.name) === 0 || r.title.indexOf(h.name + ' · ') === 0);
+    return row && row.hero.outfit === (h.outfit || 'rover');
+  }));
+  const jobRow = heroRows.find(r => r.hero.outfit === 'wizard');
+  T('法师行带 wizard 配件调色板', !!jobRow);
   storage.setHero('rover');
 }
 

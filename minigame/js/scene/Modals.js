@@ -133,7 +133,9 @@ function buildHeroRows(sm, refresh) {
       sub = trait.desc
     }
     return {
-      hero: h.pal,            // 英雄小人 chip（调色板驱动），比抽象图标更直观
+      // 英雄小人 chip（调色板驱动）：必须带上 outfit 职业配件字段，
+      // 否则弹窗预览缺帽子/武器等造型，与游戏内实际皮肤对不上（getHeroPal 仅运行时注入）
+      hero: Object.assign({}, h.pal, { outfit: h.outfit || 'rover' }),
       icCol: h.pal.tunic,
       title: title,
       sub: sub,
