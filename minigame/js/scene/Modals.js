@@ -293,7 +293,7 @@ function showSupply(sm, onClose) {
         const lv = ups[k] || 0
         const maxed = lv >= storage.UPG_COST.length
         rows.push({
-          ick: k,
+          ick: UPG_ICON[k] || 'star',
           icCol: UPG_COL[k] || '#FFC15E',
           title: UPG_FX[k] + ' · Lv' + lv,
           sub: maxed ? '已达最高等级' : '下一级延时 +' + storage.UPG_DELTA[k] + 's',
