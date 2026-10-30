@@ -57,11 +57,19 @@ ScrollView.prototype.touchMove = function (tx, ty) {
   const now = Date.now()
   const delta = p - this.lastPos
   const dt = Math.max(now - this.lastMoveAt, 1)
-  // 橡皮筋：越界方向阻力 0.35
+  // 橡皮筋：越界阻力随越界深度递增，且总越界量封顶 28px——
+  // 此前固定 0.35 阻力且无上限，用力拖拽可越界很远，松手回弹距离大，
+  // 表现为"滚动到尽头又反向滚回一段"；且越界段速度未计入阻力，惯性虚高。
+  const LIMIT = 28
   const next = this.offset - delta
   const beyond = next < 0 ? -next : (next > this.max() ? next - this.max() : 0)
-  this.offset = this.offset - delta * (beyond > 0 ? 0.35 : 1)
-  this.velocity = delta / dt
+  const res = beyond > 0 ? Math.max(0.06, 0.35 * (1 - beyond / LIMIT)) : 1
+  this.offset = this.offset - delta * res
+  if (this.offset < -LIMIT) this.offset = -LIMIT
+  const hi = this.max() + LIMIT
+  if (this.offset > hi) this.offset = hi
+  // 速度上限 1.5px/ms（≈1500px/s）：防止个别机型触摸事件 dt 异常小导致惯性速度爆炸
+  this.velocity = Math.max(-1.5, Math.min(1.5, (delta * res) / dt))
   this.lastPos = p
   this.lastMoveAt = now
   this.lastScrollAt = now
@@ -69,6 +77,8 @@ ScrollView.prototype.touchMove = function (tx, ty) {
 
 ScrollView.prototype.touchEnd = function () {
   this.dragging = false
+  // 越界松手：只做回弹，不带惯性（避免陈旧速度在回弹到位后把内容再次带飞）
+  if (this.offset < 0 || this.offset > this.max()) this.velocity = 0
   this.lastScrollAt = Date.now()
 }
 
@@ -93,7 +103,9 @@ ScrollView.prototype.update = function () {
       if (Math.abs(this.offset - this.max()) < 0.4) this.offset = this.max()
       active = true
     } else if (Math.abs(this.velocity) >= 0.02) {
-      this.offset += this.velocity * dt * 1000
+      // 惯性：velocity 是"手指"速度，offset 与手指反向，必须用 -=；
+      // 此前 += 会让松手后内容先往回滚一段再撞界停住（用户反馈的"滚到底又反向滚一段"根因之一）
+      this.offset -= this.velocity * dt * 1000
       this.velocity *= Math.pow(0.0025, dt)
       active = true
       // 惯性到达边界：清零速度，交给回弹分支
