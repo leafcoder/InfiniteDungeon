@@ -118,6 +118,32 @@ const HEROES = [
   {
     id: 'royal', name: '星海贵胄', desc: '光尘购买 · 稀有', by: 'dust', price: 320, ick: 'crown',
     pal: { skin: '#FFEAD8', hair: '#E8E4FF', tunic: '#C79BFF', tunic2: '#8F6BD9', pants: '#3A2E5C', boot: '#241C3E', eye: '#241C3E', flame: ['255,250,230', '255,220,140', '240,180,80'] }
+  },
+  // ---- 职业系皮肤（v1.2 反馈：换皮不换色，造型差异化）----
+  {
+    id: 'mage', name: '秘纹法师', desc: '光尘购买 · 职业款', by: 'dust', price: 180, ick: 'spark',
+    outfit: 'wizard',
+    pal: { skin: '#FFE3C4', hair: '#3A3F8C', tunic: '#7A6BFF', tunic2: '#4A3EB8', pants: '#262450', boot: '#181636', eye: '#181636', flame: ['230,225,255', '160,140,255', '100,80,230'] }
+  },
+  {
+    id: 'samurai', name: '月影武士', desc: '累计通关 60 关解锁', by: 'clears', need: 60, ick: 'sword',
+    outfit: 'samurai',
+    pal: { skin: '#F5D5B5', hair: '#1A1A28', tunic: '#C23B4E', tunic2: '#7E1F30', pants: '#221826', boot: '#141018', eye: '#141018', flame: ['255,235,235', '255,150,150', '220,80,90'] }
+  },
+  {
+    id: 'knight', name: '黎明骑士', desc: '累计 80 颗星解锁', by: 'stars', need: 80, ick: 'shield',
+    outfit: 'knight',
+    pal: { skin: '#F2C8A8', hair: '#5A4632', tunic: '#9FB6E8', tunic2: '#5A74B8', pants: '#2E3A5C', boot: '#1C2440', eye: '#1C2440', flame: ['250,250,255', '190,210,250', '120,150,220'] }
+  },
+  {
+    id: 'rogue', name: '夜幕刺客', desc: '光尘购买 · 职业款', by: 'dust', price: 260, ick: 'eye',
+    outfit: 'rogue',
+    pal: { skin: '#E8C8A8', hair: '#20202E', tunic: '#3E4458', tunic2: '#262B3C', pants: '#1A1E2C', boot: '#10121C', eye: '#9AE8D8', flame: ['220,240,255', '150,200,230', '90,140,180'] }
+  },
+  {
+    id: 'archer', name: '风语弓手', desc: '累计通关 90 关解锁', by: 'clears', need: 90, ick: 'leaf',
+    outfit: 'archer',
+    pal: { skin: '#FFE3C4', hair: '#7A4E2A', tunic: '#6FBF7A', tunic2: '#3E8C52', pants: '#2C4A34', boot: '#1A2E20', eye: '#1A2E20', flame: ['235,255,230', '160,230,150', '90,180,100'] }
   }
 ];
 
@@ -129,7 +155,12 @@ const HERO_TRAITS = {
   abyssal: { name: '渊视', desc: '迷雾关火把视野 +8%', view: 1.08 },
   sakura:  { name: '樱盾', desc: '开局 2 秒无敌', invuln: 2000 },
   lava:    { name: '熔核余温', desc: 'Boss 追逐关步频 +5%', bossStep: 0.95 },
-  royal:   { name: '贵胄礼遇', desc: '每日挑战光尘 +10%', daily: 1.10 }
+  royal:   { name: '贵胄礼遇', desc: '每日挑战光尘 +10%', daily: 1.10 },
+  mage:    { name: '秘纹回响', desc: '道具效果时长 +15%', fxDur: 1.15 },
+  samurai: { name: '居合残心', desc: 'Boss 关步频 +10%', bossStep: 0.90 },
+  knight:  { name: '铁壁誓约', desc: '道具效果时长 +20%', fxDur: 1.20 },
+  rogue:   { name: '暗影轻盈', desc: '迷雾关火把视野 +6%', view: 1.06 },
+  archer:  { name: '鹰眼', desc: '迷雾关火把视野 +12%', view: 1.12 }
 };
 function getHeroTrait() {
   return HERO_TRAITS[getHero()] || null;
@@ -224,6 +255,7 @@ function getHeroPal() {  const cur = getHero();
     const pal = {};
     const src = HEROES[i].pal;
     for (const k in src) pal[k] = src[k];
+    pal.outfit = HEROES[i].outfit || 'rover'; // 职业配件随 pal 走（drawWalker/drawHeroChip 共用）
     const c = hexToRgbStr(src.tunic);
     pal.glow = 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',0.55)';
     return pal;

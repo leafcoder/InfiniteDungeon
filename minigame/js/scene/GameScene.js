@@ -13,6 +13,7 @@ const endless = require('../core/endless')
 const festival = require('../core/festival')
 const PlayCore = require('../core/play')
 const Modal = require('../ui/Modal')
+const Icons = require('../ui/Icons')
 const { drawBoard, computeLayout, FX_GLYPH, FX_COLOR } = require('../render/board')
 const fx = require('../ui/fx')
 const Background = require('../ui/Background')
@@ -113,6 +114,8 @@ GameScene.prototype.enter = function (params) {
   this._bagCount = 0
   this.tutPickHinted = false
   this._usedItem = false // 本局是否用过道具（赤手空拳成就判定）
+  this.mmOpen = storage.getSetting('mmOpen', true) // 小地图展开态（可折叠，防遮挡出口）
+  this.mmRect = null
   fx.clear()
   // 加载过渡页（M4）：最小 650ms，首帧完成后淡出
   this.loading = { until: Date.now() + 650, tipIdx: 0, tipUntil: 0 }
@@ -234,6 +237,12 @@ GameScene.prototype.onTouchStart = function (tx, ty) {
     return
   }
   if (this.loading) return
+  // 小地图交互：命中则切换折叠态，不进入移动逻辑（防误触转向）
+  if (this.mmHit(tx, ty)) {
+    this.mmOpen = !this.mmOpen
+    storage.setSetting('mmOpen', this.mmOpen)
+    return
+  }
   if (this.backBtn) this.backBtn.touch(tx, ty, true)
   if (this.helpBtn) this.helpBtn.touch(tx, ty, true)
   if (this.bagBtns) for (let i = 0; i < this.bagBtns.length; i++) this.bagBtns[i].touch(tx, ty, true)
@@ -1500,15 +1509,35 @@ GameScene.prototype.hexA2 = function (hex, a) {
   return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')'
 }
 
-// 右下角小地图：镜头滚动后提供全貌与威胁分布（出口 / 玩家 / 怪物）
+// 右下角小地图：镜头滚动后提供全貌与威胁分布（出口 / 玩家 / 怪物 / 钥匙高亮）
+// 可折叠（反馈：小地图浮层会挡住迷宫出口）：点小地图折叠成圆钮、再点展开；状态跨局记忆
 GameScene.prototype.drawMinimap = function (ctx, v, u) {
   const core = this.core
   if (!core || !core.maze) return
-  const m = core.maze
   const W = this.sm.W, H = this.sm.H
+  if (!this.mmOpen) {
+    // 折叠态：右下角圆钮（地图图标），不再遮挡画面
+    const bs = 40 * u
+    const bx = W - 12 * u - bs
+    const by = H - 12 * u - bs
+    this.mmRect = { x: bx, y: by, w: bs, h: bs }
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(bx + bs / 2, by + bs / 2, bs / 2, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(8,10,26,0.66)'
+    ctx.fill()
+    ctx.lineWidth = 1
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)'
+    ctx.stroke()
+    Icons.drawIcon(ctx, 'map', bx + bs / 2, by + bs / 2, bs * 0.34, '#F3F1FF')
+    ctx.restore()
+    return
+  }
+  const m = core.maze
   const mmS = 86 * u
   const mmX = W - 12 * u - mmS
   const mmY = H - 12 * u - mmS
+  this.mmRect = { x: mmX, y: mmY, w: mmS, h: mmS }
   ctx.save()
   // 底板（半透明圆角）
   roundRect(ctx, mmX, mmY, mmS, mmS, 10 * u)
@@ -1533,12 +1562,28 @@ GameScene.prototype.drawMinimap = function (ctx, v, u) {
   // 出口（有钥匙=绿可出，否则金=锁）
   ctx.fillStyle = core.hasKey ? '#6EE7A0' : '#FFD86E'
   ctx.fillRect(mmX + m.end.x * sx - 1, mmY + m.end.y * sy - 1, sx + 2, sy + 2)
-  // 星尘（小金点）与道具/钥匙（主题色点）
+  // 星尘（小金点）与道具（主题色点）；钥匙单独高亮（脉冲光环 + 白描边）
+  const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 320)
   for (let i = 0; i < core.items.length; i++) {
     const it = core.items[i]
     if (it.taken) continue
+    if (it.type === 'key') {
+      const kx = mmX + it.x * sx + sx / 2
+      const ky = mmY + it.y * sy + sy / 2
+      ctx.fillStyle = 'rgba(255,216,110,' + (0.28 - 0.16 * pulse) + ')'
+      ctx.beginPath()
+      ctx.arc(kx, ky, Math.max(3.2, sx * 1.5) + pulse * Math.max(1.4, sx * 0.7), 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#FFD86E'
+      ctx.beginPath()
+      ctx.arc(kx, ky, Math.max(2.2, sx * 0.95), 0, Math.PI * 2)
+      ctx.fill()
+      ctx.lineWidth = 1.2
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+      ctx.stroke()
+      continue
+    }
     if (it.type === 'gem') ctx.fillStyle = 'rgba(255,216,110,0.85)'
-    else if (it.type === 'key') ctx.fillStyle = '#FFD86E'
     else ctx.fillStyle = FX_COLOR[it.type] || '#9B8CFF'
     const rr = it.type === 'gem' ? Math.max(0.8, sx * 0.38) : Math.max(1.6, sx * 0.62)
     ctx.beginPath()
@@ -1559,7 +1604,18 @@ GameScene.prototype.drawMinimap = function (ctx, v, u) {
   ctx.arc(mmX + core.visual.x * sx + sx / 2, mmY + core.visual.y * sy + sy / 2, Math.max(2.2, sx * 0.75), 0, Math.PI * 2)
   ctx.fill()
   ctx.restore() // clip
+  // 右上角收起角标「—」
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'
+  ctx.fillRect(mmX + mmS - 11 * u, mmY + 5 * u, 7 * u, 1.6 * u)
   ctx.restore()
+}
+
+// 小地图命中（展开态点图折叠 / 折叠态点圆钮展开）
+GameScene.prototype.mmHit = function (tx, ty) {
+  const r = this.mmRect
+  if (!r || !this.core || !this.core.maze || this.mmOpen === undefined) return false
+  const pad = 4 * this.u
+  return tx >= r.x - pad && tx <= r.x + r.w + pad && ty >= r.y - pad && ty <= r.y + r.h + pad
 }
 
 // 剧情过场面板（UI 2.0：弹性入场 + 卷轴光带 + 立绘浮动）

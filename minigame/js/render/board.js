@@ -8,6 +8,7 @@ const FX_COLOR = {
   cloak: '#9B8CFF', freeze: '#5BC8FF', dash: '#FF9F6E', shield: '#6FE3D2',
   magnet: '#5EE6D8', flare: '#FF6B6B', decoy: '#FF9EC4', hourglass: '#FFD86E', scroll: '#FFC15E'
 }
+const Icons = require('../ui/Icons') // 职业配件 drawHeroOutfit（mage/samurai/knight/rogue/archer）
 
 function computeLayout(core, view) {
   const m = core.maze
@@ -417,6 +418,14 @@ function drawWalker(ctx, core, view, x, y, cs, now) {
     ctx.arc(hcx - hr * 0.36 + exo, hcy + hr * 0.18, hr * 0.14, 0, Math.PI * 2)
     ctx.arc(hcx + hr * 0.36 + exo, hcy + hr * 0.18, hr * 0.14, 0, Math.PI * 2)
     ctx.fill()
+  }
+
+  // 职业配件（魔法师帽/武士盔/骑士盔/兜帽/羽帽等）：以头心为原点叠画
+  if (P.outfit && P.outfit !== 'rover') {
+    ctx.save()
+    ctx.translate(hcx, hcy)
+    Icons.drawHeroOutfit(ctx, P, cs)
+    ctx.restore()
   }
 
   ctx.restore() // 上半身

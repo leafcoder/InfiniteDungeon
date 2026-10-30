@@ -372,6 +372,52 @@ function drawIcon(ctx, key, cx, cy, s, col) {
       ctx.fill()
       break
     }
+    case 'pumpkin': { // 万圣南瓜：橙瓜身 + 藤茎 + 三角眼嘴（矢量，比 emoji 清晰稳定）
+      // 藤茎
+      ctx.strokeStyle = '#5FA05A'
+      ctx.lineWidth = Math.max(1.4, s * 0.14)
+      ctx.beginPath()
+      ctx.moveTo(0, -s * 0.42)
+      ctx.quadraticCurveTo(s * 0.14, -s * 0.58, s * 0.24, -s * 0.52)
+      ctx.stroke()
+      // 瓜身（三瓣椭圆感：中瓣大 + 两侧瓣）
+      ctx.fillStyle = '#FF8A2A'
+      ctx.beginPath()
+      ctx.ellipse ? ctx.ellipse(0, s * 0.08, s * 0.46, s * 0.40, 0, 0, Math.PI * 2) : ctx.arc(0, s * 0.08, s * 0.44, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#E86E14'
+      ctx.beginPath()
+      ctx.ellipse ? ctx.ellipse(-s * 0.26, s * 0.08, s * 0.17, s * 0.34, 0, 0, Math.PI * 2) : ctx.arc(-s * 0.26, s * 0.08, s * 0.2, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.beginPath()
+      ctx.ellipse ? ctx.ellipse(s * 0.26, s * 0.08, s * 0.17, s * 0.34, 0, 0, Math.PI * 2) : ctx.arc(s * 0.26, s * 0.08, s * 0.2, 0, Math.PI * 2)
+      ctx.fill()
+      // 提灯面孔（深色镂空：三角眼 + 锯齿嘴）
+      ctx.fillStyle = '#3A1A06'
+      ctx.beginPath()
+      ctx.moveTo(-s * 0.22, -s * 0.06)
+      ctx.lineTo(-s * 0.06, -s * 0.06)
+      ctx.lineTo(-s * 0.14, s * 0.08)
+      ctx.closePath()
+      ctx.fill()
+      ctx.beginPath()
+      ctx.moveTo(s * 0.22, -s * 0.06)
+      ctx.lineTo(s * 0.06, -s * 0.06)
+      ctx.lineTo(s * 0.14, s * 0.08)
+      ctx.closePath()
+      ctx.fill()
+      ctx.beginPath()
+      ctx.moveTo(-s * 0.20, s * 0.20)
+      ctx.lineTo(-s * 0.08, s * 0.26)
+      ctx.lineTo(0, s * 0.20)
+      ctx.lineTo(s * 0.08, s * 0.26)
+      ctx.lineTo(s * 0.20, s * 0.20)
+      ctx.lineTo(s * 0.12, s * 0.32)
+      ctx.lineTo(-s * 0.12, s * 0.32)
+      ctx.closePath()
+      ctx.fill()
+      break
+    }
     case 'tower': { // 无尽塔：叠层塔身 + 塔尖旗
       ctx.fillRect(-s * 0.30, -s * 0.06, s * 0.60, s * 0.52)   // 塔基
       ctx.fillRect(-s * 0.20, -s * 0.38, s * 0.40, s * 0.30)   // 塔身
@@ -539,7 +585,146 @@ function drawHeroChip(ctx, P, cx, cy, s) {
   ctx.arc(-hr * 0.36, hcy + hr * 0.18, hr * 0.14, 0, Math.PI * 2)
   ctx.arc(hr * 0.36, hcy + hr * 0.18, hr * 0.14, 0, Math.PI * 2)
   ctx.fill()
+  // ---- 职业配件（outfit）：换皮不再是换色，而是换造型 ----
+  ctx.save()
+  ctx.translate(0, hcy)
+  drawHeroOutfit(ctx, P, cs)
+  ctx.restore()
   ctx.restore()
 }
 
-module.exports = { drawIcon: drawIcon, hexA: hexA, drawHeroChip: drawHeroChip }
+// 职业配件：以「头顶点」为原点绘制专属造型（wizard/samurai/knight/rogue/archer）
+// board.js 的 drawWalker 与 drawHeroChip 共用，坐标全部相对头心 (0,0)，半径 hr = cs*0.125
+function drawHeroOutfit(ctx, P, cs) {
+  const outfit = P.outfit
+  if (!outfit || outfit === 'rover') return
+  const hr = cs * 0.125
+  ctx.lineCap = 'round'
+  if (outfit === 'wizard') {
+    // 尖顶法师帽（帽檐 + 高尖顶 + 星饰）
+    ctx.fillStyle = P.tunic2
+    ctx.beginPath()
+    ctx.ellipse ? ctx.ellipse(0, -hr * 0.55, hr * 1.35, hr * 0.30, 0, 0, Math.PI * 2) : ctx.arc(0, -hr * 0.55, hr * 1.2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(-hr * 0.85, -hr * 0.55)
+    ctx.quadraticCurveTo(-hr * 0.2, -hr * 2.3, hr * 0.5, -hr * 2.6)
+    ctx.quadraticCurveTo(hr * 0.25, -hr * 1.4, hr * 0.85, -hr * 0.55)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = '#FFE9A8'
+    ctx.beginPath()
+    ctx.arc(hr * 0.08, -hr * 1.7, hr * 0.16, 0, Math.PI * 2)
+    ctx.fill()
+    // 法杖（斜握，杖头宝珠）
+    ctx.strokeStyle = '#8A6238'
+    ctx.lineWidth = cs * 0.045
+    ctx.beginPath()
+    ctx.moveTo(cs * 0.20, cs * 0.16)
+    ctx.lineTo(cs * 0.30, -cs * 0.22)
+    ctx.stroke()
+    ctx.fillStyle = P.flame ? 'rgba(' + P.flame[1] + ',0.95)' : '#FFD86E'
+    ctx.beginPath()
+    ctx.arc(cs * 0.31, -cs * 0.26, cs * 0.055, 0, Math.PI * 2)
+    ctx.fill()
+  } else if (outfit === 'samurai') {
+    // 武士盔（浅盏 + 前立）+ 背刀
+    ctx.fillStyle = P.tunic2
+    ctx.beginPath()
+    ctx.arc(0, -hr * 0.1, hr * 1.08, Math.PI, Math.PI * 2)
+    ctx.fill()
+    ctx.fillRect(-hr * 1.08, -hr * 0.16, hr * 2.16, hr * 0.20)
+    ctx.fillStyle = '#FFD86E'
+    ctx.fillRect(-hr * 0.07, -hr * 1.85, hr * 0.14, hr * 0.85) // 前立
+    ctx.fillRect(-hr * 0.28, -hr * 1.55, hr * 0.56, hr * 0.13)
+    // 背刀（斜负于背后）
+    ctx.strokeStyle = '#C8CDE8'
+    ctx.lineWidth = cs * 0.05
+    ctx.beginPath()
+    ctx.moveTo(-cs * 0.20, cs * 0.12)
+    ctx.lineTo(cs * 0.26, -cs * 0.24)
+    ctx.stroke()
+    ctx.strokeStyle = '#3A3F66'
+    ctx.lineWidth = cs * 0.07
+    ctx.beginPath()
+    ctx.moveTo(-cs * 0.22, cs * 0.15)
+    ctx.lineTo(-cs * 0.17, cs * 0.08)
+    ctx.stroke()
+  } else if (outfit === 'knight') {
+    // 全覆头盔：圆盔 + 十字缝 + 盔缨
+    ctx.fillStyle = '#B9C0DE'
+    ctx.beginPath()
+    ctx.arc(0, 0, hr * 1.12, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#2A3054'
+    ctx.fillRect(-hr * 0.10, -hr * 0.7, hr * 0.20, hr * 0.5)  // 纵缝
+    ctx.fillRect(-hr * 0.7, hr * 0.02, hr * 1.4, hr * 0.16) // 横缝
+    ctx.strokeStyle = P.tunic2
+    ctx.lineWidth = cs * 0.035
+    ctx.beginPath()
+    ctx.moveTo(0, -hr * 1.1)
+    ctx.quadraticCurveTo(hr * 0.5, -hr * 1.7, hr * 0.9, -hr * 1.3)
+    ctx.stroke()
+    // 左臂圆盾
+    ctx.fillStyle = P.tunic2
+    ctx.beginPath()
+    ctx.arc(-cs * 0.20, cs * 0.02, cs * 0.115, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#FFD86E'
+    ctx.beginPath()
+    ctx.arc(-cs * 0.20, cs * 0.02, cs * 0.045, 0, Math.PI * 2)
+    ctx.fill()
+  } else if (outfit === 'rogue') {
+    // 兜帽（包住头）+ 面巾 + 匕首
+    ctx.fillStyle = P.tunic2
+    ctx.beginPath()
+    ctx.arc(hr * 0.1, -hr * 0.12, hr * 1.22, Math.PI * 0.75, Math.PI * 2.05)
+    ctx.fill()
+    ctx.fillStyle = P.pants
+    ctx.fillRect(-hr * 1.05, hr * 0.30, hr * 2.1, hr * 0.42) // 面巾
+    ctx.fillStyle = P.eye
+    ctx.beginPath()
+    ctx.arc(-hr * 0.34, hr * 0.12, hr * 0.15, 0, Math.PI * 2)
+    ctx.arc(hr * 0.34, hr * 0.12, hr * 0.15, 0, Math.PI * 2)
+    ctx.fill()
+    // 手持匕首（短刃）
+    ctx.strokeStyle = '#C8CDE8'
+    ctx.lineWidth = cs * 0.045
+    ctx.beginPath()
+    ctx.moveTo(cs * 0.17, cs * 0.10)
+    ctx.lineTo(cs * 0.30, -cs * 0.06)
+    ctx.stroke()
+    ctx.strokeStyle = '#3A3F66'
+    ctx.lineWidth = cs * 0.06
+    ctx.beginPath()
+    ctx.moveTo(cs * 0.14, cs * 0.14)
+    ctx.lineTo(cs * 0.20, cs * 0.07)
+    ctx.stroke()
+  } else if (outfit === 'archer') {
+    // 羽帽（软帽 + 侧羽）+ 背弓
+    ctx.fillStyle = P.tunic2
+    ctx.beginPath()
+    ctx.ellipse ? ctx.ellipse(hr * 0.1, -hr * 0.75, hr * 1.25, hr * 0.5, -0.12, 0, Math.PI * 2) : ctx.arc(0, -hr * 0.75, hr * 1.2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = '#7ED9A0'
+    ctx.lineWidth = cs * 0.035
+    ctx.beginPath()
+    ctx.moveTo(-hr * 0.7, -hr * 0.9)
+    ctx.quadraticCurveTo(-hr * 1.5, -hr * 1.5, -hr * 1.7, -hr * 0.7)
+    ctx.stroke()
+    // 背弓（弧 + 弦）
+    ctx.strokeStyle = '#8A6238'
+    ctx.lineWidth = cs * 0.05
+    ctx.beginPath()
+    ctx.arc(-cs * 0.02, -cs * 0.06, cs * 0.30, Math.PI * 0.65, Math.PI * 1.45)
+    ctx.stroke()
+    ctx.strokeStyle = 'rgba(240,240,255,0.8)'
+    ctx.lineWidth = cs * 0.02
+    ctx.beginPath()
+    ctx.moveTo(-cs * 0.02 + cs * 0.30 * Math.cos(Math.PI * 0.65), -cs * 0.06 + cs * 0.30 * Math.sin(Math.PI * 0.65))
+    ctx.lineTo(-cs * 0.02 + cs * 0.30 * Math.cos(Math.PI * 1.45), -cs * 0.06 + cs * 0.30 * Math.sin(Math.PI * 1.45))
+    ctx.stroke()
+  }
+}
+
+module.exports = { drawIcon: drawIcon, hexA: hexA, drawHeroChip: drawHeroChip, drawHeroOutfit: drawHeroOutfit }

@@ -15,6 +15,7 @@ const challenge = require('../core/challenge')
 const ad = require('../core/ad')
 const endless = require('../core/endless')
 const festival = require('../core/festival')
+const Icons = require('../ui/Icons')
 const Modals = require('./Modals')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
@@ -84,27 +85,27 @@ HomeScene.prototype.enter = function () {
 
   // ---- 顶栏：标题 + 光尘（左），圆形图标钮（右） ----
   this.iconBtns = []
-  const TOPY = (this.sm.capB || SAT + 40) + 2 * u   // 胶囊下缘以下
   const ibD = 28 * u
   const ibGap = 7 * u
-  // 顶栏圆形图标钮：图鉴 / 挑战码 / 皮肤 / 设置（右→左排列，设置最左）
+  // 光尘胶囊：标题正下方左侧（独立第二行）；右上图标钮与其同一水平线（反馈：原先错位一档）
+  const gy = SAT + 28 * u
+  this.pillRect = { x: 30 * u, y: gy + 30 * u, w: 84 * u, h: 28 * u }
+  // 顶栏圆形图标钮：图鉴 / 挑战码 / 皮肤 / 分享 / 设置（右→左排列，设置最左）
   ;[
     { key: 'ach', icon: '📖' },
     { key: 'code', icon: '🔑' },
     { key: 'skin', icon: '🎨' },
+    { key: 'share', icon: '📤' },
     { key: 'settings', icon: '⚙️' }
   ].forEach(function (def, i) {
     self.iconBtns.push(new Button({
-      x: W - 16 * u - ibD - i * (ibD + ibGap), y: TOPY, w: ibD, h: ibD,
+      x: W - 16 * u - ibD - i * (ibD + ibGap), y: self.pillRect.y, w: ibD, h: ibD,
       label: def.icon, fontSize: Math.round(13 * u), round: true, glass: true,
       fill: 'rgba(255,255,255,0.10)', fill2: 'rgba(255,255,255,0.05)',
       textColor: '#F3F1FF',
       onTap: function () { self.openEntry(def.key) }
     }))
   })
-  // 光尘胶囊：移到标题正下方左侧（独立第二行），避免遮挡游戏名并减少顶栏右侧拥挤
-  const gy = SAT + 28 * u
-  this.pillRect = { x: 30 * u, y: gy + 30 * u, w: 84 * u, h: 28 * u }
 
   // ---- 底部锚点：Dock → CTA（先算底部，网格高度随之自适应） ----
   const dockY = H - SAB - 12 * u - 56 * u
@@ -128,7 +129,8 @@ HomeScene.prototype.enter = function () {
   })
 
   // ---- Hero 卡（顶栏内容下方，取按钮行与光尘胶囊下沿较大值再留白） ----
-  const clusterBottom = Math.max(TOPY + ibD, this.pillRect.y + this.pillRect.h)
+  // Hero 卡：顶栏第二行（胶囊与图标钮同线）下沿再留白
+  const clusterBottom = this.pillRect.y + this.pillRect.h
   this.hero = { x: 16 * u, y: clusterBottom + 14 * u, w: W - 32 * u, h: 140 * u }
   // 节日限时活动入口（N12）：Hero 卡正下方的全宽活动横幅，活动结束自动消失
   this.fest = festival.getActive()
@@ -138,19 +140,7 @@ HomeScene.prototype.enter = function () {
   // 活动横幅占位：圆点指示器与关卡网格的纵向锚点随之下移
   this.festBottom = this.festRect ? this.festRect.y + this.festRect.h + 8 * u : this.hero.y + this.hero.h + 10 * u
   this.heroSc = new ScrollView({ x: this.hero.x, y: this.hero.y, w: this.hero.w, h: this.hero.h, horizontal: true })
-  // 左右箭头（圆形玻璃钮，垂直居中）
-  this.chevL = new Button({
-    x: this.hero.x + 8 * u, y: this.hero.y + this.hero.h / 2 - 17 * u, w: 34 * u, h: 34 * u,
-    label: '‹', fontSize: Math.round(22 * u), round: true, glass: true, vMid: true,
-    fill: 'rgba(255,255,255,0.10)', fill2: 'rgba(255,255,255,0.04)', textColor: '#F3F1FF',
-    onTap: function () { self.switchZone(self.activeZone - 1) }
-  })
-  this.chevR = new Button({
-    x: this.hero.x + this.hero.w - 42 * u, y: this.hero.y + this.hero.h / 2 - 17 * u, w: 34 * u, h: 34 * u,
-    label: '›', fontSize: Math.round(22 * u), round: true, glass: true, vMid: true,
-    fill: 'rgba(255,255,255,0.10)', fill2: 'rgba(255,255,255,0.04)', textColor: '#F3F1FF',
-    onTap: function () { self.switchZone(self.activeZone + 1) }
-  })
+  // 分区切换：左右滑动 + 圆点指示器（反馈：两侧箭头与手势重复且挤占空间，已移除）
 
   // ---- 关卡节点图（5 列紧凑节点，紧贴圆点下方，高度自适应到 CTA 上沿） ----
   this.gz = { x: 16 * u, y: this.festBottom + 18 * u, w: W - 32 * u }
@@ -231,6 +221,17 @@ HomeScene.prototype.switchZone = function (idx, dir) {
 // 入口分发
 HomeScene.prototype.openEntry = function (key) {
   const self = this
+  if (key === 'share') {
+    // 分享游戏（E 系列：主动分享入口；无分享能力环境降级为复制口令文案）
+    try {
+      if (typeof wx !== 'undefined' && wx.shareAppMessage) {
+        wx.shareAppMessage({ title: '无尽地宫 · 120 关迷宫探险，敢走到底吗？' })
+      } else {
+        this.sm.toast('当前环境不支持分享')
+      }
+    } catch (e) { this.sm.toast('当前环境不支持分享') }
+    return
+  }
   if (key === 'daily') {
     this.modal = Modals.showDaily(this.sm, function () {
       self.modal = null
@@ -339,7 +340,7 @@ HomeScene.prototype.drawFestBanner = function (ctx, v) {
   ctx.lineWidth = 1
   ctx.strokeStyle = 'rgba(255,210,63,' + (0.45 + 0.25 * pulse) + ')'
   ctx.stroke()
-  // 左侧 emoji 圆徽
+  // 左侧圆徽：有矢量图标用矢量（清晰稳定），否则退回系统 emoji
   const cx = r.x + 26 * u
   const cy = r.y + r.h / 2
   ctx.beginPath()
@@ -348,8 +349,12 @@ HomeScene.prototype.drawFestBanner = function (ctx, v) {
   ctx.fill()
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.font = Math.round(17 * u) + 'px sans-serif'
-  ctx.fillText(this.fest.emoji, cx, cy + 1)
+  if (this.fest.iconKey) {
+    Icons.drawIcon(ctx, this.fest.iconKey, cx, cy + 1, 17 * u, '#FF8A2A')
+  } else {
+    ctx.font = Math.round(17 * u) + 'px sans-serif'
+    ctx.fillText(this.fest.emoji, cx, cy + 1)
+  }
   // 活动名 + 副语
   ctx.textAlign = 'left'
   ctx.fillStyle = '#FFE9A8'
@@ -417,8 +422,6 @@ HomeScene.prototype.onTouchStart = function (tx, ty) {
   this.touchDown = { x: tx, y: ty, t: Date.now() }
   for (let i = 0; i < this.iconBtns.length; i++) this.iconBtns[i].touch(tx, ty, true)
   this.goBtn.touch(tx, ty, true)
-  this.chevL.touch(tx, ty, true)
-  this.chevR.touch(tx, ty, true)
   for (let i = 0; i < this.dock.length; i++) {
     const d = this.dock[i]
     if (tx >= d.x - 4 && tx <= d.x + d.w + 4 && ty >= d.y - 4 && ty <= d.y + d.h + 4) {
@@ -440,8 +443,6 @@ HomeScene.prototype.onTouchEnd = function (tx, ty) {
   if (this.modal) { this.modal.onTouchEnd(tx, ty); return }
   for (let i = 0; i < this.iconBtns.length; i++) this.iconBtns[i].touch(tx, ty, false)
   this.goBtn.touch(tx, ty, false)
-  this.chevL.touch(tx, ty, false)
-  this.chevR.touch(tx, ty, false)
   // Dock：按下与松起落在同一项才触发
   for (let i = 0; i < this.dock.length; i++) {
     const d = this.dock[i]
@@ -867,8 +868,6 @@ HomeScene.prototype.drawHero = function (ctx, v) {
   ctx.textBaseline = 'alphabetic'
 
   // 左右箭头
-  this.chevL.draw(ctx)
-  this.chevR.draw(ctx)
   ctx.restore()
 }
 

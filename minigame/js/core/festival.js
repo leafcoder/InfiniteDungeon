@@ -5,7 +5,7 @@ const storage = require('./storage.js');
 // start/end 为 MM-DD；支持跨年区间（如新春 01-15 ~ 02-20）
 const FESTIVALS = [
   {
-    id: 'halloween', name: '万圣夜巡游', emoji: '🎃',
+    id: 'halloween', name: '万圣夜巡游', emoji: '🎃', iconKey: 'pumpkin',
     start: '10-24', end: '11-02', skin: 'festival',
     tagline: '南瓜灯亮起，地宫的墙在偷笑',
     levels: [40, 70, 95],

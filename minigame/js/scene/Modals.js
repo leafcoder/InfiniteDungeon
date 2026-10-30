@@ -810,9 +810,8 @@ function showCode(sm, startFn, onClose) {
       rows: rows,
       buttons: [
         { label: '复制口令', primary: true, onTap: function () {
-          copyText(code)
+          copyText(code, sm)
           storage.addCodeHist(code)
-          sm.toast('口令已复制，去发给好友吧')
         } },
         { label: '粘贴口令', onTap: function () { pasteCode(sm, startFn) } },
         { label: '关闭' }
@@ -904,33 +903,41 @@ function journalDetail(sm, j, back) {
   })
 }
 
-function copyText(text) {
+function copyText(text, sm) {
+  // 复制必须给确定反馈（反馈：toast 说复制了但输入框里看不到）
   try {
-    wx.setClipboardData({ data: text })
-  } catch (e) {}
+    wx.setClipboardData({
+      data: text,
+      success: function () { if (sm) sm.toast('口令已复制 ✓') },
+      fail: function () { if (sm) sm.toast('复制失败，请长按口令手动复制') }
+    })
+  } catch (e) { if (sm) sm.toast('复制失败，请长按口令手动复制') }
 }
 
 function pasteCode(sm, startFn) {
   try {
     wx.getClipboardData({
       success: function (res) {
-        if (!goCode(sm, startFn, res.data)) { sm.toast('剪贴板没有有效口令，可手动输入'); manualInput(sm, startFn) }
+        const clip = (res.data || '').trim()
+        if (goCode(sm, startFn, clip)) return
+        // 剪贴板无有效口令：预填进输入框，用户能看到「粘贴」结果并可编辑（反馈：输入框无法显示粘贴）
+        manualInput(sm, startFn, clip)
       },
-      fail: function () { manualInput(sm, startFn) }
+      fail: function () { manualInput(sm, startFn, '') }
     })
   } catch (e) {
-    manualInput(sm, startFn)
+    manualInput(sm, startFn, '')
   }
 }
 
-// 手动输入兜底（剪贴板读取失败/无效时）：editable showModal
-function manualInput(sm, startFn) {
+// 手动输入兜底（剪贴板读取失败/无效时）：editable showModal，prefill 为剪贴板内容预填
+function manualInput(sm, startFn, prefill) {
   try {
     wx.showModal({
       title: '输入挑战口令',
-      content: '',
+      content: prefill || '',
       editable: true,
-      placeholderText: '粘贴或输入 MZ 开头的 9 位口令',
+      placeholderText: prefill ? '以上内容来自剪贴板，可修改后确认' : '粘贴或输入 MZ 开头的 9 位口令',
       success: function (res) {
         if (!res.confirm) return
         if (!goCode(sm, startFn, res.content || '')) { sm.toast('口令无效：应为 MZ 开头的 9 位码'); return }
