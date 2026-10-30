@@ -160,7 +160,7 @@ GameScene.prototype.buildCore = function () {
   // 渊视（abyssal 特性）：迷雾关火把视野 +8%
   if (trait && trait.view && this.level >= 41) core.viewMul *= trait.view
   // 樱盾（sakura 特性）：开局 2 秒无敌
-  if (trait && trait.invuln) core.invulnUntil = Math.max(core.invulnUntil || 0, core.now + trait.invuln)
+  if (trait && trait.invuln) core.invulnUntil = Math.max(core.invulnUntil || 0, Date.now() + trait.invuln) // core.now 首帧前为 0，须用墙钟
   // 技能每局次数（已解锁才可用）
   core.skillUses = { dash: skillOwned.dash ? 3 : 0, insight: skillOwned.insight ? 2 : 0 }
   // 道具/技能试用（E4）：补给站点「试用」→ 本局免费体验 1 次，用完即焚
@@ -635,11 +635,11 @@ GameScene.prototype.shareWin = function (st, stars) {
 
 GameScene.prototype.onWin = function (st) {
   const best = this.core.bestSteps || 1
-  const stepOK = st.steps <= best * 1.35
-  const swipeOK = st.swipe <= Math.max(3, Math.round(best / 6))
+  // 时间达标仅用于「极速行者」成就，不再参与星级
   const timeOK = st.time <= Math.max(8, Math.round(best * 0.45))
-  const cnt = (stepOK ? 1 : 0) + (swipeOK ? 1 : 0) + (timeOK ? 1 : 0)
-  const stars = cnt >= 3 ? 3 : cnt >= 2 ? 2 : 1
+  // 星级（v1.2 反馈调整）：步数/操作/时间不再关联星级，只看光尘收集率——全收 3 星、≥60% 2 星、通关保底 1 星
+  const ratio = st.gemTotal > 0 ? st.gems / st.gemTotal : 1
+  const stars = ratio >= 1 ? 3 : ratio >= 0.6 ? 2 : 1
   let dustEarn
   let extra = []
   try {
@@ -745,7 +745,7 @@ GameScene.prototype.onWin = function (st) {
   this.buildOverlay('win', {
     title: '通关！' + '★'.repeat(stars) + '☆'.repeat(3 - stars),
     lines: [
-      '用时 ' + st.time + 's · 步数 ' + st.steps + '/' + best,
+      '用时 ' + st.time + 's · 光尘 ' + st.gems + '/' + st.gemTotal + (timeOK ? ' ⚡' : ''),
       '光尘 +' + dustEarn + '✦（' + st.gems + '/' + st.gemTotal + '）' + extra.join(' ')
     ],
     btns: [

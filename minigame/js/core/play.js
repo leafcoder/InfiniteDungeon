@@ -29,6 +29,7 @@ function PlayCore(level, opts) {
   this.survTalents = {}                // 生存波间天赋计数（N1，当局有效）
   this.events = []
   this.now = 0
+  this._t0 = null
   this.initLevel()
 }
 
@@ -376,6 +377,7 @@ PlayCore.prototype.inputDir = function (d) {
 PlayCore.prototype.tick = function (now) {
   this.now = now
   if (this.dead || this.won) return this.drain()
+  if (this._t0 == null) this._t0 = now // 计时起点：首帧 tick（this.now 是绝对时间戳，用时须用 elapsed）
   if (!this._lastTick) this._lastTick = now
   const dt = Math.min((now - this._lastTick) / 1000, 0.1)
   this._lastTick = now
@@ -503,7 +505,7 @@ PlayCore.prototype.doStep = function () {
   if (s.x !== px || s.y !== py) {
     this.steps++
     this.pathHistory.push({ x: px, y: py })
-    this.ghostPath.push({ t: this.now / 1000, x: s.x, y: s.y })
+    this.ghostPath.push({ t: this.elapsedS(), x: s.x, y: s.y })
     // 传送门
     if (this.portals) {
       const pi = this.portalAt(s.x, s.y)
@@ -1176,9 +1178,14 @@ PlayCore.prototype.fail = function (reason, monster) {
   this.emit('fail', { reason: reason, monster: monster ? (monster.name || (monster.isBoss ? '迷宫之主' : '怪物')) : null })
 }
 
+PlayCore.prototype.elapsedS = function () {
+  // 对外用时 = 距首帧 tick 的秒数（this.now 是 epoch 毫秒，不能直接除 1000）
+  return this._t0 == null ? 0 : Math.max(0, (this.now - this._t0) / 1000)
+}
+
 PlayCore.prototype.stats = function () {
   return {
-    time: Math.floor(this.now / 1000),
+    time: Math.floor(this.elapsedS()),
     steps: this.steps,
     swipe: this.swipeCount,
     gems: this.collected,
