@@ -931,6 +931,49 @@ function placeSecrets(level, maze, seed) {
 }
 
 /**
+ * 放置迷宫事件格（N2，L15+ 约 45% 关卡出现，每关至多 1 个）：
+ * 死路格上的 祭坛(altar)/诅咒宝箱(curse)/神秘商人(merchant)。
+ * occupied: {'x,y':1} 已占用格（道具/暗室/闸门/单向门/传送门），事件格避开。
+ * 返回 [{x,y,kind}]（写入 maze.events）。踩上由游戏层运行时触发。
+ */
+function placeEvents(level, maze, seed, occupied) {
+  maze.events = [];
+  if (level < 15) return maze.events;
+  const rng = mulberry32((seed !== undefined ? seed : ((level * 911) + 7)) >>> 0 || 1);
+  if (Math.floor(rng() * 100) >= 45) return maze.events;
+  const grid = maze.grid;
+  const W = maze.W;
+  const H = maze.H;
+  const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+  const cands = [];
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (grid[y][x] !== 1) continue;
+      const k = x + ',' + y;
+      if (occupied && occupied[k]) continue;
+      if (x === maze.start.x && y === maze.start.y) continue;
+      if (x === maze.end.x && y === maze.end.y) continue;
+      // 死路：恰好 1 个可走邻居（与暗室候选同型，玩家有"探到头有惊喜"的预期）
+      let open = 0;
+      for (let i = 0; i < 4; i++) {
+        const nx = x + DIRS[i][0];
+        const ny = y + DIRS[i][1];
+        if (nx >= 0 && nx < W && ny >= 0 && ny < H && grid[ny][nx] === 1) open++;
+      }
+      if (open !== 1) continue;
+      // 离起点足够远，避免开局撞见
+      if (Math.abs(x - maze.start.x) + Math.abs(y - maze.start.y) < 6) continue;
+      cands.push({ x: x, y: y });
+    }
+  }
+  if (!cands.length) return maze.events;
+  const c = cands[Math.floor(rng() * cands.length)];
+  const kinds = ['altar', 'curse', 'merchant'];
+  maze.events.push({ x: c.x, y: c.y, kind: kinds[Math.floor(rng() * kinds.length)] });
+  return maze.events;
+}
+
+/**
  * 放置动态闸门（L66+ 约 40% 关卡出现）：通路上的闸门周期开合。
  * - 候选 = 直走廊中段（恰好 2 个正交通路且方向相反），关上时形成临时墙。
  * - 避开起点/终点/传送门/单向门/怪物巡逻路径（怪物无视闸门，走固定路径时不被夹住）。
@@ -1073,6 +1116,7 @@ module.exports = {
   placePortals: placePortals,
   placeOneWays: placeOneWays,
   placeSecrets: placeSecrets,
+  placeEvents: placeEvents,
   placeGates: placeGates,
   placeGatekeeper: placeGatekeeper,
   placeItems: placeItems,

@@ -26,6 +26,7 @@ function PlayCore(level, opts) {
   this.survival = !!opts.survival      // 生存模式（无尽波次）
   this.fxDur = opts.fxDur || function () { return 8000 }
   this.stepMul = opts.stepMul || 1     // 疾风天赋步频倍率（<1 更快）
+  this.survTalents = {}                // 生存波间天赋计数（N1，当局有效）
   this.events = []
   this.now = 0
   this.initLevel()
@@ -127,6 +128,12 @@ PlayCore.prototype.initLevel = function () {
   m.key = its.key
   const gk = maze.placeGatekeeper(level, m, this.monsters, m.key, this.seed)
   if (gk) this.monsters.push(gk)
+  // 迷宫事件格（N2）：道具之后放置，避开道具/暗室/闸门/单向门/传送门已占格
+  this.eventMap = {}
+  const evs = maze.placeEvents(level, m, this.seed, this.occupiedCells())
+  for (let i = 0; i < evs.length; i++) {
+    this.eventMap[evs[i].x + ',' + evs[i].y] = evs[i]
+  }
   this.itemMap = {}
   for (let i = 0; i < this.items.length; i++) {
     this.itemMap[this.items[i].x + ',' + this.items[i].y] = this.items[i]
@@ -215,6 +222,29 @@ PlayCore.prototype.initLevel = function () {
   this.ghostPath = []
   this.hint = ''
   this._gatePhase = 0
+}
+
+// 已占用格集合（事件格放置用）：道具/暗室/单向门/闸门/传送门
+PlayCore.prototype.occupiedCells = function () {
+  const used = {}
+  let i
+  if (this.items) {
+    for (i = 0; i < this.items.length; i++) used[this.items[i].x + ',' + this.items[i].y] = 1
+  }
+  if (this.secretMap) {
+    for (const k in this.secretMap) used[k] = 1
+  }
+  const m = this.maze
+  if (m.oneways) {
+    for (i = 0; i < m.oneways.length; i++) used[m.oneways[i].x + ',' + m.oneways[i].y] = 1
+  }
+  if (m.gates) {
+    for (i = 0; i < m.gates.length; i++) used[m.gates[i].x + ',' + m.gates[i].y] = 1
+  }
+  if (m.portals) {
+    for (i = 0; i < m.portals.length; i++) used[m.portals[i].x + ',' + m.portals[i].y] = 1
+  }
+  return used
 }
 
 /* ============ 输入 ============ */
@@ -389,7 +419,12 @@ PlayCore.prototype.tick = function (now) {
       if (this._waveGrace <= 0) this.startWave(1)
     } else {
       this.waveTimeLeft -= dt
-      if (this.waveTimeLeft <= 0) this.startWave(this.wave + 1)
+      if (this.waveTimeLeft <= 0) {
+        // 波间天赋（N1）：第 1 波结束后，每次波清给 3 选 1（当局有效）
+        const offers = this.pickWaveTalents()
+        if (offers.length) this.emit('waveclear', { wave: this.wave, offers: offers })
+        this.startWave(this.wave + 1)
+      }
     }
   }
 
@@ -474,6 +509,12 @@ PlayCore.prototype.doStep = function () {
       } else if (pi < 0) {
         this.portalCd = false
       }
+    }
+    // 事件格（N2）：踩上触发一次性事件（祭坛/诅咒宝箱/神秘商人），场景层弹选择
+    if (this.eventMap && this.eventMap[s.x + ',' + s.y]) {
+      const ev = this.eventMap[s.x + ',' + s.y]
+      delete this.eventMap[s.x + ',' + s.y]
+      this.emit('eventTile', { x: s.x, y: s.y, kind: ev.kind })
     }
   }
   this.checkPickup()
@@ -758,6 +799,10 @@ PlayCore.prototype.stepGatekeeper = function (m, grid, tx, ty) {
 PlayCore.prototype.startWave = function (n) {
   this.wave = n
   this.waveTimeLeft = 20 + n * 4
+  // 铁壁天赋：每波开始 +2s 无敌
+  if (this.survTalents && this.survTalents.iron) {
+    this.invulnUntil = Math.max(this.invulnUntil || 0, this.now + 2000)
+  }
   const count = n + 1
   const px = this.state.x
   const py = this.state.y
@@ -790,6 +835,20 @@ PlayCore.prototype.startWave = function (n) {
     }
   }
   this.emit('wave', { wave: n })
+}
+
+/* ============ 生存波间天赋（N1，当局有效） ============ */
+
+const WAVE_TALENTS = ['torch', 'magnet', 'iron', 'swift', 'alch', 'greed']
+
+// 随机取 3 个不重复的波间天赋供选择
+PlayCore.prototype.pickWaveTalents = function () {
+  const pool = WAVE_TALENTS.slice()
+  const out = []
+  while (out.length < 3 && pool.length) {
+    out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0])
+  }
+  return out
 }
 
 /* ============ 技能（补给站解锁：dash 闪现步 / insight 透视眼） ============ */
@@ -988,7 +1047,7 @@ PlayCore.prototype.applyMagnet = function () {
   if (!this.items || !this.state) return
   const px = this.state.x
   const py = this.state.y
-  const R = 2.6
+  const R = 2.6 + (this.survTalents && this.survTalents.magnet ? 1.2 * this.survTalents.magnet : 0) // 磁潮天赋：吸程递增
   const r2 = R * R
   let got = 0
   for (let i = 0; i < this.items.length; i++) {

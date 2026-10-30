@@ -381,6 +381,12 @@ GameScene.prototype.handleEvent = function (ev) {
       fx.shake(5, 0.3)
       this.snd('alert')
       break
+    case 'waveclear':
+      this.showWaveTalents(d)
+      break
+    case 'eventTile':
+      this.showEventTile(d)
+      break
     case 'pickup': {
       this.snd(d.type === 'gem' ? 'pick' : 'power')
       try { storage.encounterCodex(d.type === 'gem' ? 'i_gem' : 'i_' + d.type) } catch (e) {}
@@ -578,7 +584,7 @@ GameScene.prototype.onFail = function (reason) {
   const self = this
   let extra = []
   storage.resetCombo() // 连击中断
-  // 生存模式：阵亡记录最佳波数
+  // 生存模式：阵亡记录最佳波数 + 结算光尘（N1：贪金天赋 +25%/级）
   if (this.mode === 'survival') {
     const reached = Math.max(1, this.core.wave || 1)
     const st = storage.getStats()
@@ -588,6 +594,12 @@ GameScene.prototype.onFail = function (reason) {
       extra.push('新纪录！')
     }
     extra.push('撑到第 ' + reached + ' 波')
+    const greedLv = (this.core.survTalents && this.core.survTalents.greed) || 0
+    const dustEarn = Math.round((this.core.collected + reached * 2) * (1 + 0.25 * greedLv))
+    if (dustEarn > 0) {
+      storage.addDust(dustEarn)
+      extra.push('光尘 +' + dustEarn + '✦')
+    }
   }
   const canRevive = !this.reviveUsed
   // 新手教学（E5）：首次失败给「原地复活」免费教学一次 + 失败代价提示
@@ -1011,6 +1023,169 @@ GameScene.prototype.drawCompass = function (ctx, v, u, W) {
   ctx.fillStyle = 'rgba(243,241,255,0.65)'
   ctx.font = Math.round(8 * u) + 'px sans-serif'
   ctx.fillText('出口', cx, cy + r + 11 * u)
+}
+
+// ============ 生存波间天赋（N1） ============
+const WAVE_TALENT_META = {
+  torch: { name: '光焰', desc: '火把光圈 +30%', ick: 'lantern', col: '#FFD86E' },
+  magnet: { name: '磁潮', desc: '拾光吸程 +1.2 格', ick: 'spark', col: '#6FE3D2' },
+  iron: { name: '铁壁', desc: '每波开始 +2 秒无敌', ick: 'shield', col: '#9BC4FF' },
+  swift: { name: '疾足', desc: '移动步频 -12%', ick: 'bolt', col: '#FFC15E' },
+  alch: { name: '药师', desc: '道具时长 +40%', ick: 'leaf', col: '#6FE3A0' },
+  greed: { name: '贪金', desc: '本局结算光尘 +25%', ick: 'crown', col: '#FF9AB8' }
+}
+const EVENT_ITEM_POOL = ['cloak', 'freeze', 'dash', 'shield', 'magnet', 'flare', 'decoy']
+
+// 应用一个波间天赋（铁壁/磁潮/贪金由 core 读 survTalents，其余就地改 core 参数）
+function applyWaveTalent(scene, k) {
+  const core = scene.core
+  if (!core || !WAVE_TALENT_META[k]) return
+  if (!core.survTalents) core.survTalents = {}
+  core.survTalents[k] = (core.survTalents[k] || 0) + 1
+  if (k === 'torch') core.viewMul = (core.viewMul || 1) * 1.3
+  else if (k === 'swift') core.stepMs = Math.max(70, Math.round(core.stepMs * 0.88))
+  else if (k === 'alch') {
+    const old = core.fxDur
+    core.fxDur = function (t) { return Math.round(old(t) * 1.4) }
+  }
+  scene.setHint('获得强化：' + WAVE_TALENT_META[k].name + ' · ' + WAVE_TALENT_META[k].desc)
+  scene.snd('power')
+}
+
+GameScene.prototype.showWaveTalents = function (d) {
+  const self = this
+  const rows = (d.offers || []).filter(function (k) { return WAVE_TALENT_META[k] }).map(function (k) {
+    const meta = WAVE_TALENT_META[k]
+    return {
+      ick: meta.ick,
+      icCol: meta.col,
+      title: meta.name,
+      sub: meta.desc,
+      tag: '选择',
+      tagColor: '#6FE3D2',
+      onTap: function (m) {
+        applyWaveTalent(self, k)
+        m.close()
+      }
+    }
+  })
+  if (!rows.length) return
+  this.snd('power')
+  this.modal = new Modal(this.sm, {
+    title: '第 ' + d.wave + ' 波通过！',
+    lines: [{ t: '选择一项临时强化（仅本局有效，可叠加）', s: 12, c: '#9AA0C8' }],
+    rows: rows,
+    buttons: [{ label: '跳过' }],
+    onClose: function () { self.modal = null }
+  })
+}
+
+// ============ 迷宫事件格（N2） ============
+GameScene.prototype.showEventTile = function (d) {
+  const self = this
+  const core = this.core
+  const close = function (m) { m.close() }
+  const bagHasRoom = core.bag.length < 3
+  const giveItem = function () {
+    const t = EVENT_ITEM_POOL[Math.floor(Math.random() * EVENT_ITEM_POOL.length)]
+    const slot = core.addToBag(t)
+    if (!slot) {
+      // 背包满：道具落在事件格上（登记 itemMap，复用地图拾取链路）
+      const it = { x: d.x, y: d.y, type: t, taken: false }
+      core.items.push(it)
+      core.itemMap[d.x + ',' + d.y] = it
+    }
+    return t
+  }
+  let title, lines, rows
+  if (d.kind === 'altar') {
+    title = '🕯 古老祭坛'
+    lines = [
+      { t: '祭坛上刻着古老的纹路，似在渴望光尘。', s: 12 },
+      { t: '献上 15✦，换取一项本关增益。', s: 12, c: '#FFC15E' }
+    ]
+    rows = [
+      {
+        ick: 'spark', icCol: '#C79BFF',
+        title: '献上 15✦',
+        sub: '随机增益：视野 / 步频 / 道具时长',
+        dim: storage.getDust() < 15,
+        tag: storage.getDust() < 15 ? '光尘不足' : '献祭',
+        tagColor: '#C79BFF',
+        onTap: function (m) {
+          if (!storage.spendDust(15)) { self.setHint('光尘不足'); close(m); return }
+          const roll = Math.floor(Math.random() * 3)
+          if (roll === 0) { core.viewMul = (core.viewMul || 1) * 1.35; self.setHint('祭坛回应：视野 +35%（本关）') }
+          else if (roll === 1) { core.stepMs = Math.max(70, Math.round(core.stepMs * 0.9)); self.setHint('祭坛回应：步频 +10%（本关）') }
+          else {
+            const old = core.fxDur
+            core.fxDur = function (t) { return Math.round(old(t) * 1.5) }
+            self.setHint('祭坛回应：道具时长 +50%（本关）')
+          }
+          self.snd('power')
+          close(m)
+        }
+      },
+      { ick: 'check', icCol: '#9AA0C8', title: '离开', sub: '不动祭坛，继续赶路', onTap: close }
+    ]
+  } else if (d.kind === 'curse') {
+    title = '📦 诅咒宝箱'
+    lines = [
+      { t: '宝箱缝隙渗出暗紫色的雾……', s: 12 },
+      { t: '打开：+25✦ 与随机道具，但怪物会提速。', s: 12, c: '#FF6B81' }
+    ]
+    rows = [
+      {
+        ick: 'survival', icCol: '#FF6B81',
+        title: '打开宝箱',
+        sub: '+25✦ · 随机道具 · 怪物提速 12%',
+        tag: '冒险',
+        tagColor: '#FF6B81',
+        onTap: function (m) {
+          storage.addDust(25)
+          const t = giveItem()
+          core.monsterStepMs = Math.max(240, Math.round(core.monsterStepMs * 0.88))
+          self.setHint('诅咒生效：+' + t + ' 道具与 25✦，但怪物变快了！')
+          fx.shake(6, 0.35)
+          self.snd('alert')
+          close(m)
+        }
+      },
+      { ick: 'check', icCol: '#9AA0C8', title: '离开', sub: '不碰为妙', onTap: close }
+    ]
+  } else {
+    title = '🧺 神秘商人'
+    lines = [
+      { t: '兜帽商人靠墙而立：「诚惠，童叟无欺。」', s: 12 },
+      { t: '12✦ 换一个随机道具。', s: 12, c: '#FFC15E' }
+    ]
+    rows = [
+      {
+        ick: 'supply', icCol: '#FFC15E',
+        title: '购买 12✦',
+        sub: bagHasRoom ? '随机道具入背包' : '背包已满',
+        dim: storage.getDust() < 12 || !bagHasRoom,
+        tag: storage.getDust() < 12 ? '光尘不足' : (bagHasRoom ? '购买' : '背包满'),
+        tagColor: '#FFC15E',
+        onTap: function (m) {
+          if (!bagHasRoom) { self.setHint('背包已满'); close(m); return }
+          if (!storage.spendDust(12)) { self.setHint('光尘不足'); close(m); return }
+          const t = giveItem()
+          self.setHint('购得 ' + t + ' 道具')
+          self.snd('pick')
+          close(m)
+        }
+      },
+      { ick: 'check', icCol: '#9AA0C8', title: '离开', sub: '下次再来', onTap: close }
+    ]
+  }
+  this.modal = new Modal(this.sm, {
+    title: title,
+    lines: lines,
+    rows: rows,
+    buttons: [{ label: '关闭' }],
+    onClose: function () { self.modal = null }
+  })
 }
 
 // 生存模式玩法说明（游戏内随时可查，弹窗期间游戏暂停）
