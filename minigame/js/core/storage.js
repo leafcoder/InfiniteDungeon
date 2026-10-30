@@ -249,10 +249,108 @@ function buyUpgrade(k) {
   return true;
 }
 
-// 道具实际生效时长（秒）：基础 + 等级增量
+// 道具实际生效时长（秒）：基础 + 等级增量，再乘「磐石」天赋加成
 function fxDuration(k) {
   const u = getUpgrades();
-  return UPG_BASE[k] + (UPG_DELTA[k] || 0) * (u[k] || 0);
+  const base = UPG_BASE[k] + (UPG_DELTA[k] || 0) * (u[k] || 0);
+  return Math.round(base * (1 + 0.04 * (getTalents().guard || 0)) * 100) / 100;
+}
+
+// ---------------- 旅人之路（N7 局外天赋树） ----------------
+// 三条支线各 5 级，光尘购买、永久生效；满树只改手感、不破坏关卡难度标定。
+// 拾光：火把光照半径 +4%/级、光尘结算 +2%/级
+// 磐石：道具效果时长 +4%/级（fxDuration 内乘算）
+// 疾风：移动步频 -3%/级（PlayCore.stepMul）
+const TAL_KEY = 'maze_talent_v1';
+const TAL_COST = [20, 35, 55, 80, 120];             // Lv0→1 … 4→5
+const TAL_MAX = TAL_COST.length;
+const TALENT_META = {
+  gather: { name: '拾光', icon: 'star', col: '#FFD86E', desc: '火把光照 +4% · 光尘结算 +2%（每级）' },
+  guard: { name: '磐石', icon: 'shield', col: '#6FE3D2', desc: '道具效果时长 +4%（每级）' },
+  swift: { name: '疾风', icon: 'bolt', col: '#FF9AB8', desc: '移动步频 -3%，转身更跟手（每级）' }
+};
+
+function getTalents() {
+  try {
+    const t = wx.getStorageSync(TAL_KEY);
+    if (t && typeof t === 'object') {
+      return { gather: Math.min(t.gather || 0, TAL_MAX), guard: Math.min(t.guard || 0, TAL_MAX), swift: Math.min(t.swift || 0, TAL_MAX) };
+    }
+  } catch (e) {}
+  return { gather: 0, guard: 0, swift: 0 };
+}
+
+function buyTalent(k) {
+  if (!TALENT_META[k]) return false;
+  const t = getTalents();
+  const lv = t[k] || 0;
+  if (lv >= TAL_MAX) return false;
+  if (!spendDust(TAL_COST[lv])) return false;
+  t[k] = lv + 1;
+  try {
+    wx.setStorageSync(TAL_KEY, t);
+  } catch (e) {}
+  return true;
+}
+
+// 拾光：光尘结算倍率
+function gemValueMul() {
+  return 1 + 0.02 * (getTalents().gather || 0);
+}
+// 拾光：迷雾视野倍率（PlayCore.revealAround 乘算）
+function viewMul() {
+  return 1 + 0.04 * (getTalents().gather || 0);
+}
+// 疾风：步频倍率（越小越快）
+function stepMul() {
+  return 1 - 0.03 * (getTalents().swift || 0);
+}
+
+// ---------------- 探索度奖章（N9 第 4 颗星） ----------------
+// 分数 0-100：光尘拾取率 / 暗室发现率 / 功能道具拾取率 / 迷雾覆盖率 加权归一。
+// 奖章：≥85 金 / ≥65 银 / ≥40 铜。金奖章集齐一区（20 关）→ 分区卡「✦ 制霸」。
+const EXPLORE_KEY = 'maze_explore_v1';
+const ZONE_SIZE = 20;
+
+function getExplore() {
+  try {
+    const e = wx.getStorageSync(EXPLORE_KEY);
+    if (e && typeof e === 'object') return e;
+  } catch (e2) {}
+  return {};
+}
+
+// medal：0 无 / 1 铜 / 2 银 / 3 金；同关只保留更高分
+function recordExplore(level, score, medal) {
+  const e = getExplore();
+  const k = 'l' + level;
+  const cur = e[k];
+  if (cur && cur.score >= score) return false;
+  e[k] = { score: score, medal: medal };
+  try {
+    wx.setStorageSync(EXPLORE_KEY, e);
+  } catch (e2) {}
+  return true;
+}
+
+function bestExplore(level) {
+  return getExplore()['l' + level] || null;
+}
+
+// 分区制霸进度：金奖章数 / 20，全部金 → mastered
+function zoneExplore(zoneIdx) {
+  const e = getExplore();
+  const start = zoneIdx * ZONE_SIZE + 1;
+  let gold = 0;
+  let done = 0;
+  for (let lv = start; lv < start + ZONE_SIZE; lv++) {
+    const r = e['l' + lv];
+    if (r) {
+      done++;
+      if (r.medal >= 3) gold++;
+    }
+  }
+  return { gold: gold, done: done, total: ZONE_SIZE, mastered: gold >= ZONE_SIZE };
 }
 
 function getProgress() {
@@ -318,6 +416,9 @@ function completeLevel(level, rec) {
 
 function resetProgress() {
   saveProgress({ unlocked: 1, completed: {} });
+  try {
+    wx.removeStorageSync(EXPLORE_KEY); // 探索度与通关记录绑定，一并清空（天赋/皮肤等光尘资产保留）
+  } catch (e) {}
 }
 
 /* ============ 连击（连续通关，失败清零，用于光尘加成） ============ */
@@ -715,6 +816,18 @@ module.exports = {
   getHeroCollected: getHeroCollected,
   getUpgrades: getUpgrades,
   buyUpgrade: buyUpgrade,
+  TALENT_META: TALENT_META,
+  TAL_COST: TAL_COST,
+  TAL_MAX: TAL_MAX,
+  getTalents: getTalents,
+  buyTalent: buyTalent,
+  gemValueMul: gemValueMul,
+  viewMul: viewMul,
+  stepMul: stepMul,
+  getExplore: getExplore,
+  recordExplore: recordExplore,
+  bestExplore: bestExplore,
+  zoneExplore: zoneExplore,
   fxDuration: fxDuration,
   getSettings: getSettings,
   getSetting: getSetting,

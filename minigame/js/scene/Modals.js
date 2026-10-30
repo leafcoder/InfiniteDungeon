@@ -298,6 +298,31 @@ function showSupply(sm, onClose) {
   const makeOpts = function () {
     const rows = []
 
+    rows.push({ header: '旅人之路 · 永久天赋' })
+    const tals = storage.getTalents()
+    for (const tk in storage.TALENT_META) {
+      ;(function (tk) {
+        const meta = storage.TALENT_META[tk]
+        const lv = tals[tk] || 0
+        const maxed = lv >= storage.TAL_MAX
+        rows.push({
+          ick: meta.icon,
+          icCol: meta.col,
+          title: meta.name + ' · Lv' + lv,
+          sub: meta.desc,
+          tag: maxed ? 'MAX' : storage.TAL_COST[lv] + '✦',
+          tagColor: maxed ? '#9AA0C8' : '#FFD86E',
+          dim: maxed,
+          onTap: function (m) {
+            if (maxed) { sm.toast('已满级'); return }
+            if (storage.buyTalent(tk)) sm.toast(meta.name + ' 升到 Lv' + (lv + 1) + '！')
+            else sm.toast('光尘不足')
+            apply(m)
+          }
+        })
+      })(tk)
+    }
+
     rows.push({ header: '道具强化 · 永久生效' })
     const ups = storage.getUpgrades()
     for (const k in UPG_FX) {

@@ -25,6 +25,7 @@ function PlayCore(level, opts) {
   this.mods = opts.mods || []          // 词缀 key 数组（与 weekly.MODS 同源）
   this.survival = !!opts.survival      // 生存模式（无尽波次）
   this.fxDur = opts.fxDur || function () { return 8000 }
+  this.stepMul = opts.stepMul || 1     // 疾风天赋步频倍率（<1 更快）
   this.events = []
   this.now = 0
   this.initLevel()
@@ -155,6 +156,7 @@ PlayCore.prototype.initLevel = function () {
   }
   this.stepMs = Math.max(70, 130 - Math.floor(level / 2))
   if (this.baseStepMul) this.stepMs = Math.round(this.stepMs * this.baseStepMul)
+  if (this.stepMul && this.stepMul !== 1) this.stepMs = Math.max(70, Math.round(this.stepMs * this.stepMul)) // 疾风天赋
 
   // 词缀：围剿（+2 追击怪，放置在远离玩家的直走廊）
   if (this.modOn('more')) {
@@ -1017,7 +1019,7 @@ PlayCore.prototype.revealAround = function () {
   }
   const px = this.state.x
   const py = this.state.y
-  const R = this.fx.flare > 0 ? 7.6 : (this.darkMode ? 1.8 : 3.6) // 夜幕：半径减半
+  const R = (this.fx.flare > 0 ? 7.6 : (this.darkMode ? 1.8 : 3.6)) * (this.viewMul || 1) // 夜幕：半径减半；viewMul：拾光天赋
   const r2 = R * R
   const x0 = Math.max(0, Math.floor(px - R))
   const x1 = Math.min(m.W - 1, Math.ceil(px + R))

@@ -118,8 +118,11 @@ GameScene.prototype.buildCore = function () {
     seed: this.seed,
     mods: this.mods,
     survival: this.mode === 'survival',
-    fxDur: function (t) { return storage.fxDuration(t) }
+    fxDur: function (t) { return storage.fxDuration(t) },
+    stepMul: storage.stepMul()
   })
+  // 拾光天赋：迷雾视野半径放大（revealAround 运行时读取 viewMul）
+  core.viewMul = storage.viewMul()
   // 技能每局次数（已解锁才可用）
   core.skillUses = { dash: skillOwned.dash ? 3 : 0, insight: skillOwned.insight ? 2 : 0 }
   core.useSkill = function (k) {
@@ -460,6 +463,50 @@ GameScene.prototype.handleEvent = function (ev) {
 
 /* ---------- 结算 ---------- */
 
+GameScene.prototype.computeExplore = function (st) {
+  const core = this.core
+  const parts = []
+  // 光尘拾取率（权重 55）
+  if (st.gemTotal > 0) parts.push({ w: 55, r: Math.min(1, st.gems / st.gemTotal) })
+  // 暗室发现率（权重 20，仅刷了暗室的关）
+  const secrets = (core.maze && core.maze.secrets) || []
+  let broken = 0
+  for (let i = 0; i < secrets.length; i++) if (secrets[i].broken) broken++
+  if (secrets.length > 0) parts.push({ w: 20, r: broken / secrets.length })
+  // 功能道具拾取率（权重 15，仅有关卡放了功能道具时）
+  let itTotal = 0
+  let itGot = 0
+  const items = core.items || []
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type === 'gem') continue
+    itTotal++
+    if (items[i].taken) itGot++
+  }
+  if (itTotal > 0) parts.push({ w: 15, r: itGot / itTotal })
+  // 迷雾覆盖率（权重 10，仅迷雾关）
+  if (core.fogEnabled && core.seen && core.maze) {
+    let walk = 0
+    let seenN = 0
+    for (let y = 0; y < core.maze.H; y++) {
+      for (let x = 0; x < core.maze.W; x++) {
+        if (core.maze.grid[y][x] !== 1) continue
+        walk++
+        if (core.seen[y] && core.seen[y][x]) seenN++
+      }
+    }
+    if (walk > 0) parts.push({ w: 10, r: seenN / walk })
+  }
+  // 权重归一（缺项自动摊给其余项）
+  let wsum = 0
+  let sc = 0
+  for (let i = 0; i < parts.length; i++) wsum += parts[i].w
+  if (wsum <= 0) return { score: 100, medal: 3 }
+  for (let i = 0; i < parts.length; i++) sc += parts[i].r * parts[i].w
+  const score = Math.round((sc / wsum) * 100)
+  const medal = score >= 85 ? 3 : score >= 65 ? 2 : score >= 40 ? 1 : 0
+  return { score: score, medal: medal }
+}
+
 GameScene.prototype.onWin = function (st) {
   const best = this.core.bestSteps || 1
   const stepOK = st.steps <= best * 1.35
@@ -487,8 +534,12 @@ GameScene.prototype.onWin = function (st) {
       extra.push('挑战完成')
     } else {
       const firstClear = !storage.getProgress().completed[this.level]
-      dustEarn = firstClear ? st.gems : Math.max(1, Math.floor(st.gems / 2))
+      dustEarn = Math.round((firstClear ? st.gems : Math.max(1, Math.floor(st.gems / 2))) * storage.gemValueMul())
       storage.completeLevel(this.level, { time: st.time, steps: st.steps, swipe: st.swipe, stars: stars, gems: st.gems, gemTotal: st.gemTotal })
+      // 探索度奖章（N9）：光尘拾取/暗室/道具/迷雾覆盖 加权 → 铜/银/金
+      const exp = this.computeExplore(st)
+      storage.recordExplore(this.level, exp.score, exp.medal)
+      extra.push('🔍 探索度 ' + exp.score + ' · ' + ['无章', '铜章', '银章', '金章'][exp.medal])
       // 成就结算（N3）：解锁瞬间发放光尘奖励并在结算页展示
       const newAch = storage.recordWin(this.level, { time: st.time, steps: st.steps, swipe: st.swipe, stars: stars, gems: st.gems, gemTotal: st.gemTotal, perfect: st.gems >= st.gemTotal, usedItem: this._usedItem, boss: this.core.bossOn, timeOK: timeOK })
       for (let i = 0; i < newAch.length; i++) {

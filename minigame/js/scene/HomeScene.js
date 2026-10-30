@@ -719,8 +719,17 @@ HomeScene.prototype.drawHero = function (ctx, v) {
     badgeW = 156 * u
     badgeText = '▶ 进行中 · 第 ' + this.unlocked + ' 关'
   } else {
-    badgeW = 132 * u
-    badgeText = done >= 20 ? '✓ 已制霸' : '已通关 ' + done + '/20'
+    const zexp = storage.zoneExplore(this.activeZone)
+    if (done >= 20 && zexp.mastered) {
+      badgeW = 156 * u
+      badgeText = '✦ 金章制霸 ' + zexp.gold + '/20'
+    } else if (done >= 20) {
+      badgeW = 132 * u
+      badgeText = '✓ 已制霸'
+    } else {
+      badgeW = 148 * u
+      badgeText = '已通关 ' + done + '/20 · 金' + zexp.gold
+    }
   }
   const bx = h.x + h.w - 20 * u - badgeW
   const bby = h.y + 20 * u
