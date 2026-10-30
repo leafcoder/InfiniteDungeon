@@ -9,6 +9,8 @@ const theme = require('../core/theme')
 const weekly = require('../core/weekly')
 const challenge = require('../core/challenge')
 const ad = require('../core/ad')
+const endless = require('../core/endless')
+const festival = require('../core/festival')
 const PlayCore = require('../core/play')
 const Modal = require('../ui/Modal')
 const { drawBoard, computeLayout, FX_GLYPH, FX_COLOR } = require('../render/board')
@@ -51,16 +53,40 @@ GameScene.prototype.enter = function (params) {
   params = params || {}
   this.mode = params.mode || 'level'
   this.weekIdx = params.weekIdx
-  this.level = Math.max(1, Math.min(params.level || 1, storage.TOTAL))
-  this.mods = params.mods || []
-  this.seed = params.seed
+  // 无尽塔（N6）：难度由层号派生；节日活动（N12）：难度由活动关配置决定
+  this.floor = 0
+  this.festId = null
+  this.festIdx = 0
+  this.fest = null
+  if (this.mode === 'endless') {
+    this.floor = Math.max(1, params.floor || 1)
+    const spec = endless.floorSpec(this.floor)
+    this.level = Math.max(1, Math.min(spec.level, storage.TOTAL))
+    this.mods = spec.mods
+    this.seed = spec.seed
+    this.endlessZone = spec.zone
+  } else if (this.mode === 'festival') {
+    this.fest = params.fest || festival.getActive()
+    this.festId = this.fest ? this.fest.id : null
+    this.festIdx = Math.max(0, Math.min(params.festIdx || 0, 2))
+    const spec = this.fest ? festival.festSpec(this.fest, this.festIdx) : { level: params.level || 30, mods: [], seed: params.seed }
+    this.level = Math.max(1, Math.min(spec.level, storage.TOTAL))
+    this.mods = spec.mods
+    this.seed = spec.seed
+  } else {
+    this.level = Math.max(1, Math.min(params.level || 1, storage.TOTAL))
+    this.mods = params.mods || []
+    this.seed = params.seed
+  }
   this.code = params.code || null // 挑战口令原文（本口令最佳纪录用）
   if (this.mode === 'daily' && !this.seed) this.seed = storage.dailySeed()
   this.hudH = (this.sm.sat || 0) + 92 * u
+  // 节日活动关（N12）：本局强制活动主题氛围，不改玩家存档主题
+  const themeKey = (this.mode === 'festival' && this.fest) ? this.fest.skin : storage.getTheme()
   this.view = {
     bx: 8 * u, by: this.hudH,
     bw: W - 16 * u, bh: H - this.hudH - 10 * u,
-    v: theme.getTheme(storage.getTheme()).vars,
+    v: theme.getTheme(themeKey).vars,
     cellMin: 40 * u, // 恒定可读 cell 下限，迷宫过大时由镜头滚动呈现
     camX: 0, camY: 0, // 迷宫世界左上像素偏移（镜头）
     heroPal: storage.getHeroPal() // 英雄皮肤调色板（drawWalker 渲染）
@@ -137,6 +163,20 @@ GameScene.prototype.buildCore = function () {
   if (trait && trait.invuln) core.invulnUntil = Math.max(core.invulnUntil || 0, core.now + trait.invuln)
   // 技能每局次数（已解锁才可用）
   core.skillUses = { dash: skillOwned.dash ? 3 : 0, insight: skillOwned.insight ? 2 : 0 }
+  // 道具/技能试用（E4）：补给站点「试用」→ 本局免费体验 1 次，用完即焚
+  // 试用标记跨局保留（先打每日/生存也不丢），仅在普通关卡被消费
+  this.trialSkill = ''
+  if (this.mode === 'level') {
+    const trial = storage.getTrial()
+    if (trial && !skillOwned[trial]) {
+      this.trialSkill = trial
+      core.skillUses[trial] = 1
+      storage.clearTrial()
+      this.trialPendingHint = true
+    } else if (trial) {
+      storage.clearTrial() // 标记指向已解锁技能：过期残留，清理
+    }
+  }
   core.useSkill = function (k) {
     if (!this.skillUses[k]) {
       this.emit('hint', k === 'dash' ? '闪现步未解锁 · 前往补给站' : '透视眼未解锁 · 前往补给站')
@@ -267,6 +307,12 @@ GameScene.prototype.update = function () {
     else if (this.mode === 'weekly') this.setHint('周挑战 第' + (this.weekIdx + 1) + '关 · 词缀生效中')
     else if (this.mode === 'custom') this.setHint('自定义挑战 · 词缀生效中')
     else if (this.mode === 'survival') this.setHint('生存模式 · 坚持尽可能多的波次！')
+    else if (this.mode === 'endless') this.setHint('无尽塔 · ' + this.endlessZone.emoji + ' ' + this.endlessZone.name + '（第 ' + this.floor + ' 层）')
+    else if (this.mode === 'festival') this.setHint((this.fest ? this.fest.emoji + ' ' + this.fest.name : '节日活动') + ' · 第 ' + (this.festIdx + 1) + '/3 关')
+    if (this.trialPendingHint) {
+      this.banner = { text: this.trialSkill === 'dash' ? '试用 · 闪现步 ×1' : '试用 · 透视眼 ×1', until: Date.now() + 1800, color: '#FFD86E' }
+      this.trialPendingHint = false
+    }
     // 系统级教学（E5）：新机制首次触达时提示一次（钥匙/传送门/迷雾/Boss）
     if (this.tutOn) {
       const sysHints = {
@@ -618,6 +664,54 @@ GameScene.prototype.onWin = function (st) {
         const best = storage.recordCodeBest(this.code, st.time)
         extra.push(best.improved ? ('🏅 刷新本口令纪录 ' + st.time + 's') : ('本口令最佳 ' + best.time + 's'))
       }
+    } else if (this.mode === 'endless') {
+      // 无尽塔（N6）：过关直接爬下一层，这里只发层奖励 + 记录最深层数
+      const cur = this.floor
+      dustEarn = Math.max(2, Math.round(2 + cur * 0.6)) + st.gems
+      const stt = storage.getStats()
+      if (cur > (stt.bestFloor || 0)) {
+        stt.bestFloor = cur
+        storage.saveStats(stt)
+        extra.push('🗼 新纪录！最深 ' + cur + ' 层')
+      }
+      const nxt = cur + 1
+      const spec = endless.floorSpec(nxt)
+      storage.addDust(dustEarn)
+      this.enter({ mode: 'endless', floor: nxt })
+      this.banner = { text: '第 ' + cur + ' 层 ✓ +' + dustEarn + '✦', until: Date.now() + 1500, color: '#FFD86E' }
+      this.setHint('无尽塔 · ' + spec.zone.emoji + ' ' + spec.zone.name + '（第 ' + nxt + ' 层）')
+      return
+    } else if (this.mode === 'festival') {
+      // 节日活动（N12）：固定光尘奖励 + 进度标记 + 全通限定称号
+      dustEarn = Math.round(Math.max(3, st.gems) * 1.2)
+      const arr = storage.completeFestLevel(this.festId, this.festIdx)
+      const cleared = arr.filter(function (x) { return x }).length
+      if (storage.unlockAch('fest_clear') > 0) extra.push('🏅 节日巡游 +10✦')
+      if (cleared >= 3) {
+        storage.setFlag('fest_' + this.festId + '_done')
+        if (storage.unlockAch('fest_all') > 0) extra.push('🏅 节日制霸 +30✦')
+        extra.push('🎭 限定称号已收入「' + this.fest.name + '」')
+      }
+      const self2 = this
+      const hasNext = this.festIdx < 2
+      this.buildOverlay('win', {
+        title: '通关！' + '★'.repeat(stars) + '☆'.repeat(3 - stars),
+        lines: [
+          (this.fest ? this.fest.emoji + ' ' + this.fest.tagline : ''),
+          '用时 ' + st.time + 's · 光尘 +' + dustEarn + '✦（' + cleared + '/3 关）' + extra.join(' ')
+        ].filter(Boolean),
+        btns: hasNext
+          ? [
+              { label: '下一关', onTap: function () { self2.enter({ mode: 'festival', fest: self2.fest, festIdx: self2.festIdx + 1 }) } },
+              { label: '返回首页', onTap: function () { self2.sm.switch('home') } }
+            ]
+          : [
+              { label: '再刷一遍', onTap: function () { self2.enter({ mode: 'festival', fest: self2.fest, festIdx: 0 }) } },
+              { label: '返回首页', onTap: function () { self2.sm.switch('home') } }
+            ]
+      })
+      storage.addDust(dustEarn)
+      return
     } else {
       const firstClear = !storage.getProgress().completed[this.level]
       dustEarn = Math.round((firstClear ? st.gems : Math.max(1, Math.floor(st.gems / 2))) * storage.gemValueMul())
@@ -687,6 +781,11 @@ GameScene.prototype.onFail = function (reason) {
       extra.push('光尘 +' + dustEarn + '✦')
     }
   }
+  // 无尽塔（N6）：止步结算——每层光尘已在通过时发放，这里只报层数与纪录
+  if (this.mode === 'endless') {
+    const stf = storage.getStats()
+    extra.push('🗼 止步第 ' + this.floor + ' 层 · 最深纪录 ' + (stf.bestFloor || 0) + ' 层')
+  }
   const canRevive = !this.reviveUsed
   // 新手教学（E5）：首次失败给「原地复活」免费教学一次 + 失败代价提示
   const tutDeath = this.tutOn && canRevive && !storage.getFlag('t_death') && this.level <= 20
@@ -695,6 +794,8 @@ GameScene.prototype.onFail = function (reason) {
     extra.push('教学：被追上会失败——观察怪物视线，快步绕开')
   }
   const retry = function () {
+    if (self.mode === 'endless') { self.enter({ level: 1, mode: 'endless', floor: 1 }); return }
+    if (self.mode === 'festival') { self.enter({ mode: 'festival', fest: self.fest, festIdx: self.festIdx }); return }
     self.enter({ level: self.level, mode: self.mode, weekIdx: self.weekIdx, mods: self.mods, seed: self.mode === 'daily' ? storage.dailySeed() : self.seed })
   }
   const btns = []
@@ -973,6 +1074,8 @@ GameScene.prototype.drawHud = function (ctx, v, u, W) {
   else if (this.mode === 'weekly') title = '周挑战 ' + (this.weekIdx + 1) + '/5'
   else if (this.mode === 'custom') title = '自定义挑战'
   else if (this.mode === 'survival') title = '生存模式'
+  else if (this.mode === 'endless') title = '无尽塔 · 第 ' + this.floor + ' 层'
+  else if (this.mode === 'festival') title = this.fest ? this.fest.emoji + ' ' + this.fest.name + ' ' + (this.festIdx + 1) + '/3' : '节日活动'
   ctx.fillText(title, 18 * u, sat + 26 * u)
   // 光尘进度（胶囊徽章）
   const gp = { x: 16 * u, y: sat + 38 * u, w: 78 * u, h: 24 * u }

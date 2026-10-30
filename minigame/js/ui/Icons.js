@@ -372,6 +372,23 @@ function drawIcon(ctx, key, cx, cy, s, col) {
       ctx.fill()
       break
     }
+    case 'tower': { // 无尽塔：叠层塔身 + 塔尖旗
+      ctx.fillRect(-s * 0.30, -s * 0.06, s * 0.60, s * 0.52)   // 塔基
+      ctx.fillRect(-s * 0.20, -s * 0.38, s * 0.40, s * 0.30)   // 塔身
+      ctx.fillRect(-s * 0.10, -s * 0.58, s * 0.20, s * 0.18)   // 塔顶
+      ctx.fillRect(-s * 0.02, -s * 0.80, s * 0.04, s * 0.22)   // 旗杆
+      ctx.beginPath()                                          // 旗面
+      ctx.moveTo(s * 0.02, -s * 0.80)
+      ctx.lineTo(s * 0.30, -s * 0.72)
+      ctx.lineTo(s * 0.02, -s * 0.62)
+      ctx.closePath()
+      ctx.fill()
+      ctx.fillStyle = 'rgba(8,9,26,0.6)'                       // 门与窗
+      roundRect(ctx, -s * 0.08, s * 0.20, s * 0.16, s * 0.26, s * 0.07)
+      ctx.fill()
+      ctx.fillRect(-s * 0.06, -s * 0.28, s * 0.12, s * 0.12)
+      break
+    }
     case 'leaf': { // 灵叶
       ctx.beginPath()
       ctx.moveTo(0, s * 0.42)

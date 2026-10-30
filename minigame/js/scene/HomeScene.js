@@ -13,6 +13,8 @@ const theme = require('../core/theme')
 const weekly = require('../core/weekly')
 const challenge = require('../core/challenge')
 const ad = require('../core/ad')
+const endless = require('../core/endless')
+const festival = require('../core/festival')
 const Modals = require('./Modals')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
@@ -39,7 +41,8 @@ const DOCK = [
   { key: 'weekly', icon: '🗓️', label: '周挑战' },
   { key: 'rank', icon: '🏆', label: '排行' },
   { key: 'supply', icon: '🛒', label: '补给' },
-  { key: 'survival', icon: '💀', label: '生存' }
+  { key: 'survival', icon: '💀', label: '生存' },
+  { key: 'endless', icon: '🗼', label: '无尽' }
 ]
 
 function HomeScene(sm) {
@@ -115,7 +118,7 @@ HomeScene.prototype.enter = function () {
   })
   this.styleGoBtn()
   this.dock = []
-  const dw = (W - 32 * u - 4 * 8 * u) / 5
+  const dw = (W - 32 * u - (DOCK.length - 1) * 8 * u) / DOCK.length
   DOCK.forEach(function (d, i) {
     self.dock.push({
       key: d.key, icon: d.icon, label: d.label,
@@ -127,6 +130,11 @@ HomeScene.prototype.enter = function () {
   // ---- Hero 卡（顶栏内容下方，取按钮行与光尘胶囊下沿较大值再留白） ----
   const clusterBottom = Math.max(TOPY + ibD, this.pillRect.y + this.pillRect.h)
   this.hero = { x: 16 * u, y: clusterBottom + 14 * u, w: W - 32 * u, h: 140 * u }
+  // 节日限时活动入口（N12）：圆点指示器行右侧的限时 pill，活动结束自动消失
+  this.fest = festival.getActive()
+  this.festRect = this.fest
+    ? { x: W / 2 + 50 * u, y: this.hero.y + this.hero.h + 2 * u, w: W - 30 * u - (W / 2 + 50 * u), h: 24 * u }
+    : null
   this.heroSc = new ScrollView({ x: this.hero.x, y: this.hero.y, w: this.hero.w, h: this.hero.h, horizontal: true })
   // 左右箭头（圆形玻璃钮，垂直居中）
   this.chevL = new Button({
@@ -246,6 +254,15 @@ HomeScene.prototype.openEntry = function (key) {
       self.modal = null
       self.sm.switch('game', { mode: 'custom', level: dec.level, mods: dec.mods, seed: dec.seed, code: dec.code })
     }, function () { self.modal = null })
+  } else if (key === 'endless') {
+    if (!endless.isUnlocked()) {
+      this.sm.toast('通关全部 120 关后解锁无尽塔')
+      return
+    }
+    this.modal = Modals.showEndless(this.sm, function () {
+      self.modal = null
+      self.sm.switch('game', { mode: 'endless', floor: 1 })
+    }, function () { self.modal = null })
   } else if (key === 'survival') {
     if (!storage.getFlag('survTut')) {
       // 首次进入：玩法说明
@@ -280,6 +297,23 @@ HomeScene.prototype.openEntry = function (key) {
       this.sm.switch('game', { mode: 'survival', level: 30 })
     }
   }
+}
+
+// 节日限时活动入口（N12）：胶囊点击 → 活动弹窗 → 进入活动关
+HomeScene.prototype.openFest = function () {
+  if (!this.fest) return
+  const self = this
+  this.modal = Modals.showFestival(this.sm, function (idx) {
+    self.modal = null
+    self.sm.switch('game', { mode: 'festival', fest: self.fest, festIdx: idx })
+  }, function () { self.modal = null })
+}
+
+HomeScene.prototype.inFestPill = function (tx, ty) {
+  const r = this.festRect
+  if (!r) return false
+  const pad = 8 * this.u // 上下外扩扩大热区（视觉 24px，热区 40px）
+  return tx >= r.x && tx <= r.x + r.w && ty >= r.y - pad && ty <= r.y + r.h + pad
 }
 
 HomeScene.prototype.showToast = function (msg) {
@@ -381,6 +415,10 @@ HomeScene.prototype.onTouchEnd = function (tx, ty) {
   if (this.gridSc.dragging) {
     this.gridSc.touchEnd()
     if (this.isTap(tx, ty)) this.tapGrid(tx, ty)
+  }
+  // 节日限时活动胶囊（N12）
+  if (this.touchDown && this.isTap(tx, ty) && this.inFestPill(tx, ty)) {
+    this.openFest()
   }
   this.touchDown = null
 }
@@ -602,6 +640,23 @@ HomeScene.prototype.drawTopBar = function (ctx, v) {
   ctx.font = 'bold ' + Math.round(14 * u) + 'px sans-serif'
   ctx.fillText('✦ ' + Math.round(this.dustDisp), p.x + p.w / 2 + 3 * u, p.y + p.h / 2 + 1)
   ctx.restore()
+
+  // 节日限时活动胶囊（N12）：圆点指示器行右侧，活动期间显示
+  if (this.fest && this.festRect) {
+    const fr = this.festRect
+    const pulse = 0.5 + 0.5 * fx.pulse(1500, 0)
+    roundRect(ctx, fr.x, fr.y, fr.w, fr.h, fr.h / 2)
+    ctx.fillStyle = 'rgba(255,138,61,' + (0.10 + 0.08 * pulse) + ')'
+    ctx.fill()
+    ctx.lineWidth = 1
+    ctx.strokeStyle = 'rgba(255,210,63,' + (0.40 + 0.25 * pulse) + ')'
+    ctx.stroke()
+    ctx.textAlign = 'left'
+    ctx.fillStyle = '#FFE9A8'
+    ctx.font = 'bold ' + Math.round(11 * u) + 'px sans-serif'
+    ctx.fillText(this.fest.emoji + ' ' + this.fest.name + ' ›', fr.x + 11 * u, fr.y + fr.h / 2 + 1)
+    ctx.textAlign = 'center'
+  }
 
   // 圆形图标钮
   for (let i = 0; i < this.iconBtns.length; i++) this.iconBtns[i].draw(ctx)
@@ -924,7 +979,7 @@ HomeScene.prototype.drawGrid = function (ctx, v) {
 
 // 底部 Dock（矢量图标 + 柔光，去方盒卡片）
 const DOCK_ICON_COLOR = {
-  daily: '#6FE3D2', weekly: '#9B8CFF', rank: '#FFD86E', supply: '#FF9F6E', survival: '#FF7A92'
+  daily: '#6FE3D2', weekly: '#9B8CFF', rank: '#FFD86E', supply: '#FF9F6E', survival: '#FF7A92', endless: '#E36BFF'
 }
 
 // 矢量图标绘制：以 (cx, cy) 为中心，s 为半尺寸（实现见 ui/Icons.js，与弹窗行卡共用）

@@ -13,6 +13,8 @@ const theme = require('../core/theme')
 const weekly = require('../core/weekly')
 const challenge = require('../core/challenge')
 const ad = require('../core/ad')
+const endless = require('../core/endless')
+const festival = require('../core/festival')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
 
@@ -352,22 +354,51 @@ function showSupply(sm, onClose) {
 
     rows.push({ header: '技能' })
     const sk = storage.getSkills()
+    const trialNow = storage.getTrial()
     for (const key in storage.SKILL_META) {
       ;(function (key) {
         const meta = storage.SKILL_META[key]
         rows.push({
           ick: key === 'dash' ? 'bolt' : 'eye',
           icCol: key === 'dash' ? '#FFD86E' : '#6FE3D2',
-          title: meta.name,
-          sub: meta.desc + (sk[key] ? '' : '（每局限用次数）'),
-          tag: sk[key] ? '已解锁' : storage.SKILL_COST[key] + '✦',
+          title: meta.name + (trialNow === key ? ' · 试用中' : ''),
+          sub: meta.desc + '（试用后不满意可再解锁）',
+          tag: sk[key] ? '已解锁' : (trialNow === key ? '试用已定' : '试用'),
           tagColor: sk[key] ? '#6FE3D2' : '#FFD86E',
           dim: !!sk[key],
-          onTap: function (m) {
+          onTap: function () {
             if (sk[key]) { sm.toast('已解锁'); return }
-            if (storage.buySkill(key)) sm.toast('已解锁 ' + meta.name)
-            else sm.toast('光尘不足')
-            apply(m)
+            // 未解锁（E4）：二级弹窗 —— 先免费试用 1 局，或直接花光尘解锁
+            sm.sceneModal(new Modal(sm, {
+              title: meta.name,
+              lines: [
+                { t: meta.desc, b: true, s: 13 },
+                { t: '' },
+                { t: '· 「免费试用」：下一局自动生效 1 次，用完即焚', s: 11.5, c: '#9AA0C8' },
+                { t: '· 试用满意后可再花 ' + storage.SKILL_COST[key] + '✦ 永久解锁', s: 11.5, c: '#9AA0C8' }
+              ],
+              buttons: [
+                {
+                  label: '免费试用 1 局', primary: true,
+                  onTap: function (m2) {
+                    storage.setTrial(key)
+                    sm.toast('下一局免费试用 ' + meta.name + ' ×1')
+                    m2.close()
+                    apply()
+                  }
+                },
+                {
+                  label: storage.SKILL_COST[key] + '✦ 解锁',
+                  onTap: function (m2) {
+                    if (storage.buySkill(key)) sm.toast('已解锁 ' + meta.name)
+                    else sm.toast('光尘不足')
+                    m2.close()
+                    apply()
+                  }
+                },
+                { label: '关闭' }
+              ]
+            }))
           }
         })
       })(key)
@@ -477,6 +508,7 @@ function showAch(sm, onClose) {
 function showRank(sm, onClose) {
   const st = storage.getStats()
   const prog = storage.getProgress()
+  const todayRec = storage.getDaily()[storage.dailyKey()] // 今日挑战成绩（E6：与历史最佳分开）
   const done = Object.keys(prog.completed || {}).length
   let stars = 0
   for (const k in prog.completed) stars += (prog.completed[k].stars || 1)
@@ -506,6 +538,14 @@ function showRank(sm, onClose) {
       tagColor: '#6FE3D2'
     },
     {
+      ick: 'daily',
+      icCol: '#FFC15E',
+      title: '今日挑战（本机）',
+      sub: todayRec && todayRec.gems ? '今日已收 ' + todayRec.gems + '✦，历史最佳 ' + (st.bestDaily && st.bestDaily.gems ? st.bestDaily.gems + '✦' : '—') : '今天还没打过 · 布局全服一致',
+      tag: (todayRec && todayRec.gems ? todayRec.gems + '✦' : '今日'),
+      tagColor: '#FFD86E'
+    },
+    {
       ick: 'survival',
       icCol: '#FF7A92',
       title: '生存模式最佳',
@@ -530,6 +570,73 @@ function showRank(sm, onClose) {
     ],
     rows: rows,
     buttons: [{ label: '关闭' }],
+    onClose: onClose
+  })
+}
+
+/* ---------- 每日挑战 ---------- */
+
+/* ---------- 节日限时活动（N12） ---------- */
+
+// 返回活动弹窗；无进行中活动时返回 null（HomeScene 据此隐藏入口）
+function showFestival(sm, startFn, onClose) {
+  const fest = festival.getActive()
+  if (!fest) return null
+  const done = storage.getFestDone(fest.id)
+  const allDone = storage.isFestDone(fest.id)
+  const cleared = done.filter(function (x) { return x }).length
+  const nextIdx = done.findIndex(function (x) { return !x })
+  // 专属成就解锁态
+  const ach = storage.achList().filter(function (a) { return a.id === 'fest_clear' || a.id === 'fest_all' })
+  const lines = [
+    L(fest.emoji + ' ' + fest.tagline, { b: true, c: '#FFC15E' }),
+    L(''),
+    L('· 活动期间开放 3 关限定词缀关（难度递进，可反复挑战）', { s: 12 }),
+    L('· 全通即得限定称号「' + fest.name + '」与专属成就', { s: 12 }),
+    L(''),
+    L('进度：' + cleared + '/3 关' + (allDone ? ' · 🎭 限定称号已收入！' : ''), { c: allDone ? '#6FE3D2' : '#9AA0C8' })
+  ]
+  for (let i = 0; i < ach.length; i++) {
+    const a = ach[i]
+    lines.push(L((a.unlocked ? '🏅 ' : '🔒 ') + a.name + '（' + a.desc + '）', { s: 11.5, c: a.unlocked ? '#FFD86E' : '#9AA0C8' }))
+  }
+  return new Modal(sm, {
+    title: fest.emoji + ' ' + fest.name + ' · 限时活动',
+    lines: lines,
+    buttons: [
+      { label: allDone ? '再刷一遍' : '继续挑战（' + (nextIdx + 1) + '/3）', primary: true, onTap: function () { startFn(Math.max(0, nextIdx)) } },
+      { label: '关闭' }
+    ],
+    onClose: onClose
+  })
+}
+
+/* ---------- 无尽地宫塔（N6） ---------- */
+
+function showEndless(sm, startFn, onClose) {
+  const st = storage.getStats()
+  const unlocked = endless.isUnlocked()
+  const spec1 = endless.floorSpec(1)
+  return new Modal(sm, {
+    title: '🗼 无尽地宫塔',
+    lines: [
+      L('主线 120 关全部制霸后开放的无限爬层模式。', { b: true, c: '#FFC15E' }),
+      L(''),
+      L('· 每层一小关，通过立即爬向下一层；失败则止步回塔底', { s: 12 }),
+      L('· 每 5 层换一区氛围（' + spec1.zone.emoji + ' ' + spec1.zone.name + ' 从第 1 层开始），难度逐层攀升', { s: 12 }),
+      L('· 每 10 层出现一个 Boss 限时追逐层', { s: 12 }),
+      L('· 同层布局固定——背版也是策略', { s: 12 }),
+      L(''),
+      unlocked
+        ? L('当前最深纪录：第 ' + (st.bestFloor || 0) + ' 层', { c: '#6FE3D2', b: true })
+        : L('🔒 尚未解锁：通关全部 120 关后开放', { c: '#9AA0C8' })
+    ],
+    buttons: unlocked
+      ? [
+          { label: (st.bestFloor ? '继续爬塔' : '进入无尽塔'), primary: true, onTap: function () { startFn() } },
+          { label: '关闭' }
+        ]
+      : [{ label: '关闭' }],
     onClose: onClose
   })
 }
@@ -835,6 +942,8 @@ function manualInput(sm, startFn) {
 
 module.exports = {
   showSupply: showSupply,
+  showFestival: showFestival,
+  showEndless: showEndless,
   showSkin: showSkin,
   showSettings: showSettings,
   showAch: showAch,

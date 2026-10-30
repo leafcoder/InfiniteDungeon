@@ -477,7 +477,7 @@ function setSetting(k, v) {
 
 /* ============ 统计 ============ */
 const STAT_KEY = 'maze_stats_v1';
-const STAT_DEFAULT = { clears: 0, perfects: 0, bossClears: 0, noItemClears: 0, gemsTotal: 0, dustTotal: 0, dailyCount: 0, dailyStreak: 0, lastDaily: '', bestWave: 0, hunterWins: 0 };
+const STAT_DEFAULT = { clears: 0, perfects: 0, bossClears: 0, noItemClears: 0, gemsTotal: 0, dustTotal: 0, dailyCount: 0, dailyStreak: 0, lastDaily: '', bestWave: 0, hunterWins: 0, bestFloor: 0 };
 function getStats() {
   try {
     const s = wx.getStorageSync(STAT_KEY);
@@ -505,7 +505,9 @@ const ACHS = [
   { id: 'hundred', name: '百关达成', desc: '通关第 100 关（星海之巅）', reward: 50 },
   { id: 'void', name: '虚空征服者', desc: '通关全部 120 关（虚空回响）', reward: 100 },
   { id: 'survivor', name: '终极生存者', desc: '生存模式撑过 10 波', reward: 25 },
-  { id: 'hunter', name: '猎手时刻', desc: '抓住携带钥匙的宝藏 Boss', reward: 25 }
+  { id: 'hunter', name: '猎手时刻', desc: '抓住携带钥匙的宝藏 Boss', reward: 25 },
+  { id: 'fest_clear', name: '节日巡游', desc: '完成一关节日活动关', reward: 10 },
+  { id: 'fest_all', name: '节日制霸', desc: '通关一届节日活动全部 3 关', reward: 30 }
 ];
 const ACH_KEY = 'maze_ach_v1';
 function getAch() {
@@ -573,6 +575,8 @@ function completeDaily(date, rec) {
   const better = isBetter(rec, prev);
   if (better) d[date] = rec;
   const st = getStats();
+  // 历史最佳（排行榜「每日挑战最佳」读取）：此前只存当日档未落 stats，修复永远显示「—」的存量 bug
+  if (!st.bestDaily || isBetter(rec, st.bestDaily)) st.bestDaily = rec;
   const last = st.lastDaily;
   let streak = st.dailyStreak || 0;
   if (last === yesterdayKey()) streak = streak + 1;
@@ -899,6 +903,53 @@ function setFlag(k) {
   } catch (e) {}
 }
 
+/* ============ 道具/技能试用（E4：买前先试，用完即焚） ============ */
+const TRIAL_KEY = 'maze_trial_v1';
+// 返回当前试用标记（'dash' / 'insight'），无则 ''
+function getTrial() {
+  try {
+    const t = wx.getStorageSync(TRIAL_KEY);
+    return SKILL_META[t] ? t : '';
+  } catch (e) {
+    return '';
+  }
+}
+function setTrial(k) {
+  if (!SKILL_META[k]) return;
+  try { wx.setStorageSync(TRIAL_KEY, k); } catch (e) {}
+}
+function clearTrial() {
+  try { wx.removeStorageSync(TRIAL_KEY); } catch (e) {}
+}
+
+/* ============ 节日限时活动（N12：进度按活动 id 存） ============ */
+// 返回某届活动的 3 关完成数组
+function getFestDone(festId) {
+  const flags = getFlags();
+  const arr = [];
+  for (let i = 0; i < 3; i++) arr.push(!!flags['fest_' + festId + '_l' + i]);
+  return arr;
+}
+// 标记完成活动关 idx；返回完成数组；全部完成时置位 done 标志
+function completeFestLevel(festId, idx) {
+  setFlag('fest_' + festId + '_l' + idx);
+  const arr = getFestDone(festId);
+  if (arr.every(function (x) { return x; })) setFlag('fest_' + festId + '_done');
+  return arr;
+}
+function isFestDone(festId) {
+  return getFlag('fest_' + festId + '_done');
+}
+// 已获得的限定称号列表（按届）：[{ id, name }]
+function getFestTitles(names) {
+  // names: [{ id, name }] 由 festival 模块提供
+  const out = [];
+  for (let i = 0; i < names.length; i++) {
+    if (isFestDone(names[i].id)) out.push(names[i]);
+  }
+  return out;
+}
+
 module.exports = {
   TOTAL: TOTAL,
   UPG_COST: UPG_COST,
@@ -987,5 +1038,12 @@ module.exports = {
   saveGhost: saveGhost,
   isStorySeen: isStorySeen,
   markStorySeen: markStorySeen,
-  reportScoreKV: reportScoreKV
+  reportScoreKV: reportScoreKV,
+  getTrial: getTrial,
+  setTrial: setTrial,
+  clearTrial: clearTrial,
+  getFestDone: getFestDone,
+  completeFestLevel: completeFestLevel,
+  isFestDone: isFestDone,
+  getFestTitles: getFestTitles
 };
