@@ -435,4 +435,65 @@ function hexA(hex, a) {
   return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')'
 }
 
-module.exports = { drawIcon: drawIcon, hexA: hexA }
+/* ---------- 英雄小人 chip（弹窗行卡用） ----------
+ * 与 render/board.js 的 drawWalker 同源 chibi 造型（正面静止姿态），
+ * 由英雄调色板 P 驱动：{skin,hair,tunic,tunic2,pants,boot,eye}。
+ * (cx,cy) 中心；s 半尺寸（整高约 2s），画在 34u 图标瓦片内。 */
+function drawHeroChip(ctx, P, cx, cy, s) {
+  const cs = s * 2 // 与 drawWalker 的 cell 比例对齐
+  ctx.save()
+  ctx.translate(cx, cy)
+  // 脚下影子
+  ctx.fillStyle = 'rgba(0,0,0,0.30)'
+  ctx.save()
+  ctx.scale(1, 0.4)
+  ctx.beginPath()
+  ctx.arc(0, cs * 0.30 / 0.4, cs * 0.19, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+  // 腿 + 鞋
+  ctx.lineCap = 'round'
+  ctx.lineWidth = cs * 0.085
+  ctx.strokeStyle = P.pants
+  for (let side = -1; side <= 1; side += 2) {
+    ctx.beginPath()
+    ctx.moveTo(side * cs * 0.06, cs * 0.10)
+    ctx.lineTo(side * cs * 0.075, cs * 0.27)
+    ctx.stroke()
+    ctx.fillStyle = P.boot
+    ctx.beginPath()
+    ctx.arc(side * cs * 0.075, cs * 0.27, cs * 0.05, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  // 躯干（带皮肤主色光晕）
+  ctx.save()
+  ctx.shadowColor = hexA(P.tunic, 0.55)
+  ctx.shadowBlur = 7
+  ctx.fillStyle = P.tunic
+  roundRect(ctx, -cs * 0.13, -cs * 0.085, cs * 0.26, cs * 0.20, cs * 0.075)
+  ctx.fill()
+  ctx.restore()
+  // 腰带
+  ctx.fillStyle = P.tunic2
+  ctx.fillRect(-cs * 0.115, cs * 0.055, cs * 0.23, cs * 0.032)
+  // 头 + 头发 + 眼睛
+  const hcy = -cs * 0.215
+  const hr = cs * 0.125
+  ctx.fillStyle = P.skin
+  ctx.beginPath()
+  ctx.arc(0, hcy, hr, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = P.hair
+  ctx.beginPath()
+  ctx.arc(0, hcy - hr * 0.08, hr, Math.PI, Math.PI * 2)
+  ctx.fill()
+  ctx.fillRect(-hr, hcy - hr * 0.14, hr * 2, hr * 0.22)
+  ctx.fillStyle = P.eye
+  ctx.beginPath()
+  ctx.arc(-hr * 0.36, hcy + hr * 0.18, hr * 0.14, 0, Math.PI * 2)
+  ctx.arc(hr * 0.36, hcy + hr * 0.18, hr * 0.14, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
+module.exports = { drawIcon: drawIcon, hexA: hexA, drawHeroChip: drawHeroChip }

@@ -10,7 +10,7 @@ const theme = require('../core/theme')
 const fx = require('./fx')
 const ScrollView = require('./ScrollView')
 const { Button, roundRect } = require('./Button')
-const { drawIcon, hexA } = require('./Icons')
+const { drawIcon, drawHeroChip, hexA } = require('./Icons')
 
 function Modal(sm, opts) {
   this.sm = sm
@@ -282,10 +282,36 @@ Modal.prototype.draw = function (ctx) {
       if (r.y + r.h < b.y - 4 || r.y > b.y + b.h + 4) continue
       const row = it.row
       if (it.header) {
-        ctx.textAlign = 'left'
-        ctx.font = 'bold ' + Math.round(11.5 * u) + 'px sans-serif'
+        // 分组头：居中文字 + 两侧渐变细线（取代旧版"—— X ——"字符破折号，无设计感）
+        const hy = r.y + r.h / 2
+        ctx.textBaseline = 'middle'
+        ctx.textAlign = 'center'
+        ctx.font = 'bold ' + Math.round(11 * u) + 'px sans-serif'
         ctx.fillStyle = '#9B8CFF'
-        ctx.fillText(row.header, r.x + 2 * u, r.y + r.h / 2)
+        const label = row.header
+        ctx.fillText(label, b.x + b.w / 2, hy)
+        const tw = ctx.measureText(label).width
+        const gapH = 10 * u
+        const segW = (b.w - tw) / 2 - gapH
+        if (segW > 6) {
+          const yLine = Math.round(hy) + 0.5
+          const lx1 = b.x + b.w / 2 - tw / 2 - gapH
+          const lx0 = lx1 - segW
+          let lg = ctx.createLinearGradient(lx0, 0, lx1, 0)
+          lg.addColorStop(0, 'rgba(155,140,255,0)')
+          lg.addColorStop(1, 'rgba(155,140,255,0.55)')
+          ctx.fillStyle = lg
+          ctx.fillRect(lx0, yLine, segW, 1)
+          const rx0 = b.x + b.w / 2 + tw / 2 + gapH
+          const rx1 = rx0 + segW
+          lg = ctx.createLinearGradient(rx0, 0, rx1, 0)
+          lg.addColorStop(0, 'rgba(155,140,255,0.55)')
+          lg.addColorStop(1, 'rgba(155,140,255,0)')
+          ctx.fillStyle = lg
+          ctx.fillRect(rx0, yLine, segW, 1)
+        }
+        ctx.textBaseline = 'alphabetic'
+        ctx.textAlign = 'left'
         continue
       }
       ctx.save()
@@ -296,20 +322,24 @@ Modal.prototype.draw = function (ctx) {
       ctx.lineWidth = 1
       ctx.strokeStyle = 'rgba(255,255,255,0.10)'
       ctx.stroke()
-      // 左缘色板（皮肤/主题预览脊柱）：渐变竖条，直观区分皮肤主色
-      if (Array.isArray(row.swatch)) {
-        const sgx = r.x + 4 * u
-        const sgw = 5 * u
-        roundRect(ctx, sgx, r.y + 9 * u, sgw, r.h - 18 * u, sgw / 2)
-        const sg = ctx.createLinearGradient(0, r.y + 9 * u, 0, r.y + r.h - 9 * u)
-        sg.addColorStop(0, row.swatch[0])
-        sg.addColorStop(1, row.swatch[1] || row.swatch[0])
-        ctx.fillStyle = sg
-        ctx.fill()
-      }
-      // 图标：ick 矢量图标瓦片（清晰、机型一致）优先，emoji 兜底
+      // 图标：ick 矢量图标瓦片（清晰、机型一致）优先；hero 调色板 → 英雄小人 chip；
+      // emoji 兜底
       let tx0 = r.x + (row.icon ? 48 * u : 14 * u)
-      if (row.ick) {
+      if (row.hero) {
+        // 英雄小人 chip：调色板驱动的迷你 chibi，一眼对应游戏内角色
+        const isz = 34 * u
+        const ix = r.x + 10 * u
+        const iy = r.y + (r.h - isz) / 2
+        const col = row.icCol || '#FFC15E'
+        roundRect(ctx, ix, iy, isz, isz, 10 * u)
+        ctx.fillStyle = hexA(col, 0.13)
+        ctx.fill()
+        ctx.lineWidth = 1
+        ctx.strokeStyle = hexA(col, 0.3)
+        ctx.stroke()
+        drawHeroChip(ctx, row.hero, ix + isz / 2, iy + isz / 2 + 1 * u, isz * 0.38)
+        tx0 = ix + isz + 10 * u
+      } else if (row.ick) {
         const isz = 34 * u
         const ix = r.x + 10 * u
         const iy = r.y + (r.h - isz) / 2

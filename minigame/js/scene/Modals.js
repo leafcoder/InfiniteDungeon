@@ -17,6 +17,8 @@ const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
 
 const UPG_FX = { cloak: '隐身衣', freeze: '冰冻星', dash: '加速鞋' } // 可升级道具（与 storage.getUpgrades 同源）
+// 强化道具 → 矢量图标映射（此前直接 ick: k，Icons.js 无 'freeze'/'dash'，图标空白）
+const UPG_ICON = { cloak: 'cloak', freeze: 'snow', dash: 'shoe' }
 
 function L(t, o) {
   const ln = { t: t }
@@ -45,7 +47,6 @@ function buildSkinRows(sm, refresh) {
     rows.push({
       ick: SKIN_ICON[k] || 'spark',
       icCol: SKIN_COL[k] || '#9B8CFF',
-      swatch: [t.vars['--warn'], t.zones[0]],
       title: t.label,
       sub: t.desc || (has ? '已拥有' : '光尘解锁 · 或看广告免费解锁'),
       tag: using ? '使用中' : has ? '点按切换' : t.price + '✦',
@@ -126,9 +127,8 @@ function buildHeroRows(sm, refresh) {
     if (!avail && h.by === 'stars') sub += '（当前 ' + stats.stars + ' 星）'
     if (!avail && h.by === 'clears') sub += '（当前 ' + stats.clears + ' 关）'
     return {
-      ick: h.ick,
+      hero: h.pal,            // 英雄小人 chip（调色板驱动），比抽象图标更直观
       icCol: h.pal.tunic,
-      swatch: [h.pal.tunic, h.pal.tunic2],
       title: h.name,
       sub: sub,
       tag: tag,
@@ -199,7 +199,7 @@ function adUnlockHero(sm, h, reopen) {
 function showSkin(sm, onClose) {
   const makeOpts = function () {
     const rows = buildSkinRows(sm, apply)
-    rows.push({ header: '—— 英雄 ——' })
+    rows.push({ header: '英雄' })
     buildHeroRows(sm, apply).forEach(function (r) { rows.push(r) })
     return {
       title: '主题皮肤',
@@ -286,7 +286,7 @@ function showSupply(sm, onClose) {
   const makeOpts = function () {
     const rows = []
 
-    rows.push({ header: '—— 道具强化（永久生效）——' })
+    rows.push({ header: '道具强化 · 永久生效' })
     const ups = storage.getUpgrades()
     for (const k in UPG_FX) {
       ;(function (k) {
@@ -310,7 +310,7 @@ function showSupply(sm, onClose) {
       })(k)
     }
 
-    rows.push({ header: '—— 技能 ——' })
+    rows.push({ header: '技能' })
     const sk = storage.getSkills()
     for (const key in storage.SKILL_META) {
       ;(function (key) {
@@ -333,10 +333,10 @@ function showSupply(sm, onClose) {
       })(key)
     }
 
-    rows.push({ header: '—— 皮肤 ——' })
+    rows.push({ header: '皮肤' })
     buildSkinRows(sm, apply).forEach(function (r) { rows.push(r) })
 
-    rows.push({ header: '—— 英雄 ——' })
+    rows.push({ header: '英雄' })
     buildHeroRows(sm, apply).forEach(function (r) { rows.push(r) })
 
     return {
@@ -379,7 +379,7 @@ function showAch(sm, onClose) {
   let monsterN = 0
   let itemN = 0
   for (const k in cx) { if (k.indexOf('m_') === 0) monsterN++; else if (k.indexOf('i_') === 0 || k.indexOf('fx_') === 0) itemN++ }
-  rows.push({ header: '—— 图鉴收集（游玩自动收录）——' })
+  rows.push({ header: '图鉴收集 · 游玩自动收录' })
   rows.push({
     ick: 'monster',
     icCol: '#FF7A92',
@@ -548,7 +548,7 @@ function showCode(sm, startFn, onClose) {
   const state = { tpl: 0, mods: [], seed: Math.floor(Math.random() * 0xFFF) }
   const build = function (existing) {
     const rows = []
-    rows.push({ header: '—— 模板 ——' })
+    rows.push({ header: '模板' })
     T.forEach(function (t, i) {
       rows.push({
         ick: ['shield', 'sword', 'crown'][i] || 'sword',
@@ -561,7 +561,7 @@ function showCode(sm, startFn, onClose) {
         onTap: function (m) { state.tpl = i; build(m) }
       })
     })
-    rows.push({ header: '—— 词缀（点选叠加）——' })
+    rows.push({ header: '词缀 · 点选叠加' })
     weekly.MODS.forEach(function (m) {
       const on = state.mods.indexOf(m.key) !== -1
       rows.push({
