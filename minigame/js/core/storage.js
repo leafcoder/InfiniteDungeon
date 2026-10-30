@@ -256,8 +256,10 @@ function fxDuration(k) {
 }
 
 function getProgress() {
-  // 广告解锁永久生效：与通关进度合并取最大
-  const adMax = getAdUnlocked() + 1;
+  // 广告解锁永久生效：与通关进度合并取最大。
+  // 注意 getAdUnlocked() 存的就是"广告解锁到的最高可玩关"（adUnlockTo(lv) 传的是关卡号），
+  // 不可再 +1——否则解锁第 65 关后 unlocked 变 66，关卡格上"挑战中"标到 66（历史 bug）。
+  const adMax = getAdUnlocked();
   try {
     const p = wx.getStorageSync(KEY);
     if (p && typeof p === 'object' && p.completed) {
