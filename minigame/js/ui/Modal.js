@@ -364,7 +364,20 @@ Modal.prototype.draw = function (ctx) {
       if (row.sub) {
         ctx.font = Math.round(10.5 * u) + 'px sans-serif'
         ctx.fillStyle = v['--text-sub'] || 'rgba(243,241,255,0.7)'
-        ctx.fillText(row.sub, tx0, r.y + 40 * u)
+        // 宽度自适应截断：文字区右界到 tag 左缘（tag 用自身字体实测），超宽加省略号
+        const tagFont = 'bold ' + Math.round(12.5 * u) + 'px sans-serif'
+        let maxW = r.x + r.w - 14 * u - tx0 - 8 * u
+        if (row.tag) {
+          ctx.font = tagFont
+          maxW -= ctx.measureText(row.tag).width
+          ctx.font = Math.round(10.5 * u) + 'px sans-serif'
+        }
+        let subTxt = row.sub
+        if (ctx.measureText(subTxt).width > maxW) {
+          while (subTxt.length > 1 && ctx.measureText(subTxt + '…').width > maxW) subTxt = subTxt.slice(0, -1)
+          subTxt += '…'
+        }
+        ctx.fillText(subTxt, tx0, r.y + 40 * u)
       }
       // 右侧状态/价格
       if (row.tag) {

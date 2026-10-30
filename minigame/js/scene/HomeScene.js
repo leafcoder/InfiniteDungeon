@@ -130,11 +130,13 @@ HomeScene.prototype.enter = function () {
   // ---- Hero 卡（顶栏内容下方，取按钮行与光尘胶囊下沿较大值再留白） ----
   const clusterBottom = Math.max(TOPY + ibD, this.pillRect.y + this.pillRect.h)
   this.hero = { x: 16 * u, y: clusterBottom + 14 * u, w: W - 32 * u, h: 140 * u }
-  // 节日限时活动入口（N12）：圆点指示器行右侧的限时 pill，活动结束自动消失
+  // 节日限时活动入口（N12）：Hero 卡正下方的全宽活动横幅，活动结束自动消失
   this.fest = festival.getActive()
   this.festRect = this.fest
-    ? { x: W / 2 + 50 * u, y: this.hero.y + this.hero.h + 2 * u, w: W - 30 * u - (W / 2 + 50 * u), h: 24 * u }
+    ? { x: 16 * u, y: this.hero.y + this.hero.h + 8 * u, w: W - 32 * u, h: 36 * u }
     : null
+  // 活动横幅占位：圆点指示器与关卡网格的纵向锚点随之下移
+  this.festBottom = this.festRect ? this.festRect.y + this.festRect.h + 8 * u : this.hero.y + this.hero.h + 10 * u
   this.heroSc = new ScrollView({ x: this.hero.x, y: this.hero.y, w: this.hero.w, h: this.hero.h, horizontal: true })
   // 左右箭头（圆形玻璃钮，垂直居中）
   this.chevL = new Button({
@@ -151,7 +153,7 @@ HomeScene.prototype.enter = function () {
   })
 
   // ---- 关卡节点图（5 列紧凑节点，紧贴圆点下方，高度自适应到 CTA 上沿） ----
-  this.gz = { x: 16 * u, y: this.hero.y + this.hero.h + 28 * u, w: W - 32 * u }
+  this.gz = { x: 16 * u, y: this.festBottom + 18 * u, w: W - 32 * u }
   this.cols = 5
   this.gap = 8 * u
   this.cw = (this.gz.w - (this.cols - 1) * this.gap) / this.cols
@@ -312,8 +314,57 @@ HomeScene.prototype.openFest = function () {
 HomeScene.prototype.inFestPill = function (tx, ty) {
   const r = this.festRect
   if (!r) return false
-  const pad = 8 * this.u // 上下外扩扩大热区（视觉 24px，热区 40px）
+  const pad = 8 * this.u // 上下外扩扩大热区
   return tx >= r.x && tx <= r.x + r.w && ty >= r.y - pad && ty <= r.y + r.h + pad
+}
+
+// 节日限时活动横幅（N12）：Hero 卡正下方的全宽活动条，活动期间显示
+HomeScene.prototype.drawFestBanner = function (ctx, v) {
+  if (!this.fest || !this.festRect) return
+  const u = this.u
+  const e = this.ent(2)
+  if (e <= 0) return
+  const r = this.festRect
+  ctx.save()
+  ctx.globalAlpha = e
+  ctx.translate(0, (1 - e) * 10)
+  const pulse = 0.5 + 0.5 * fx.pulse(1600, 0)
+  // 卡底：暖橙玻璃 + 柔光
+  roundRect(ctx, r.x, r.y, r.w, r.h, 18 * u)
+  const bg = ctx.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h)
+  bg.addColorStop(0, 'rgba(255,138,61,' + (0.20 + 0.05 * pulse) + ')')
+  bg.addColorStop(1, 'rgba(255,210,63,' + (0.10 + 0.04 * pulse) + ')')
+  ctx.fillStyle = bg
+  ctx.fill()
+  ctx.lineWidth = 1
+  ctx.strokeStyle = 'rgba(255,210,63,' + (0.45 + 0.25 * pulse) + ')'
+  ctx.stroke()
+  // 左侧 emoji 圆徽
+  const cx = r.x + 26 * u
+  const cy = r.y + r.h / 2
+  ctx.beginPath()
+  ctx.arc(cx, cy, 15 * u, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(255,225,170,0.16)'
+  ctx.fill()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = Math.round(17 * u) + 'px sans-serif'
+  ctx.fillText(this.fest.emoji, cx, cy + 1)
+  // 活动名 + 副语
+  ctx.textAlign = 'left'
+  ctx.fillStyle = '#FFE9A8'
+  ctx.font = 'bold ' + Math.round(14 * u) + 'px sans-serif'
+  ctx.fillText(this.fest.name + ' · 限时活动', r.x + 50 * u, r.y + r.h / 2 - 6 * u)
+  ctx.fillStyle = 'rgba(255,233,168,0.62)'
+  ctx.font = Math.round(9.5 * u) + 'px sans-serif'
+  ctx.fillText(this.fest.tagline, r.x + 50 * u, r.y + r.h / 2 + 9 * u)
+  // 右侧 CTA
+  ctx.textAlign = 'right'
+  ctx.fillStyle = 'rgba(255,233,168,' + (0.70 + 0.30 * pulse) + ')'
+  ctx.font = 'bold ' + Math.round(12.5 * u) + 'px sans-serif'
+  ctx.fillText('进入 ›', r.x + r.w - 16 * u, r.y + r.h / 2 + 1)
+  ctx.textBaseline = 'alphabetic'
+  ctx.restore()
 }
 
 HomeScene.prototype.showToast = function (msg) {
@@ -442,7 +493,8 @@ HomeScene.prototype.dotsRect = function () {
   const dw = 8 * u
   const gap = 6 * u
   const total = n * dw + (n - 1) * gap
-  return { x: this.sm.W / 2 - total / 2, y: this.hero.y + this.hero.h + 10 * u, dw: dw, gap: gap, n: n }
+  // 活动横幅存在时，圆点行随之下移（横幅下方 10u）
+  return { x: this.sm.W / 2 - total / 2, y: this.festBottom + 0 * u, dw: dw, gap: gap, n: n }
 }
 
 HomeScene.prototype.tapDots = function (tx, ty) {
@@ -574,6 +626,7 @@ HomeScene.prototype.draw = function (ctx) {
   this.bg.draw(ctx, W, H, v, 1 / 60, 0)
   this.drawTopBar(ctx, v)
   this.drawHero(ctx, v)
+  this.drawFestBanner(ctx, v)
   this.drawDots(ctx, v)
   this.drawGrid(ctx, v)
   this.goBtn.draw(ctx)
@@ -640,23 +693,6 @@ HomeScene.prototype.drawTopBar = function (ctx, v) {
   ctx.font = 'bold ' + Math.round(14 * u) + 'px sans-serif'
   ctx.fillText('✦ ' + Math.round(this.dustDisp), p.x + p.w / 2 + 3 * u, p.y + p.h / 2 + 1)
   ctx.restore()
-
-  // 节日限时活动胶囊（N12）：圆点指示器行右侧，活动期间显示
-  if (this.fest && this.festRect) {
-    const fr = this.festRect
-    const pulse = 0.5 + 0.5 * fx.pulse(1500, 0)
-    roundRect(ctx, fr.x, fr.y, fr.w, fr.h, fr.h / 2)
-    ctx.fillStyle = 'rgba(255,138,61,' + (0.10 + 0.08 * pulse) + ')'
-    ctx.fill()
-    ctx.lineWidth = 1
-    ctx.strokeStyle = 'rgba(255,210,63,' + (0.40 + 0.25 * pulse) + ')'
-    ctx.stroke()
-    ctx.textAlign = 'left'
-    ctx.fillStyle = '#FFE9A8'
-    ctx.font = 'bold ' + Math.round(11 * u) + 'px sans-serif'
-    ctx.fillText(this.fest.emoji + ' ' + this.fest.name + ' ›', fr.x + 11 * u, fr.y + fr.h / 2 + 1)
-    ctx.textAlign = 'center'
-  }
 
   // 圆形图标钮
   for (let i = 0; i < this.iconBtns.length; i++) this.iconBtns[i].draw(ctx)
@@ -776,30 +812,29 @@ HomeScene.prototype.drawHero = function (ctx, v) {
   }
 
   // 徽章：状态指示（锁定 / 进行中 / 已通关）—— 右上角状态标，与左侧「第 X–Y 关」文案分离，文字在容器内垂直居中
+  // 宽度按文字实测自适应，避免固定宽导致的右侧空白与遮挡
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  let badgeW, badgeText
+  let badgeText
+  const badgeFont = 'bold ' + Math.round(11.5 * u) + 'px sans-serif'
   if (locked) {
     // 锁定：明确写出「需通关的最后一关」(zone.start-1)，而非用当前进度误导
     const need = Math.max(1, zone.start - 1)
-    badgeW = 184 * u
     badgeText = '🔒 通关第 ' + need + ' 关解锁'
   } else if (this.unlocked >= zone.start && this.unlocked <= zone.end) {
-    badgeW = 156 * u
     badgeText = '▶ 进行中 · 第 ' + this.unlocked + ' 关'
   } else {
     const zexp = storage.zoneExplore(this.activeZone)
     if (done >= 20 && zexp.mastered) {
-      badgeW = 156 * u
       badgeText = '✦ 金章制霸 ' + zexp.gold + '/20'
     } else if (done >= 20) {
-      badgeW = 132 * u
       badgeText = '✓ 已制霸'
     } else {
-      badgeW = 148 * u
       badgeText = '已通关 ' + done + '/20 · 金' + zexp.gold
     }
   }
+  ctx.font = badgeFont
+  const badgeW = Math.ceil(ctx.measureText(badgeText).width) + 26 * u
   const bx = h.x + h.w - 20 * u - badgeW
   const bby = h.y + 20 * u
   if (locked) {
@@ -807,8 +842,8 @@ HomeScene.prototype.drawHero = function (ctx, v) {
     roundRect(ctx, bx, bby, badgeW, 30 * u, 15 * u)
     ctx.fill()
     ctx.fillStyle = v['--text-sub']
-    ctx.font = Math.round(11.5 * u) + 'px sans-serif'
-    ctx.fillText(badgeText, bx + 14 * u, bby + 15.5 * u)
+    ctx.font = badgeFont
+    ctx.fillText(badgeText, bx + 13 * u, bby + 15.5 * u)
   } else if (this.unlocked >= zone.start && this.unlocked <= zone.end) {
     ctx.save()
     ctx.shadowColor = zc
@@ -818,15 +853,15 @@ HomeScene.prototype.drawHero = function (ctx, v) {
     ctx.fill()
     ctx.restore()
     ctx.fillStyle = 'rgba(10,12,32,0.9)'
-    ctx.font = 'bold ' + Math.round(11.5 * u) + 'px sans-serif'
-    ctx.fillText(badgeText, bx + 14 * u, bby + 15.5 * u)
+    ctx.font = badgeFont
+    ctx.fillText(badgeText, bx + 13 * u, bby + 15.5 * u)
   } else {
     ctx.fillStyle = this.hexA(zc, 0.85)
     roundRect(ctx, bx, bby, badgeW, 30 * u, 15 * u)
     ctx.fill()
     ctx.fillStyle = 'rgba(10,12,32,0.9)'
-    ctx.font = 'bold ' + Math.round(11.5 * u) + 'px sans-serif'
-    ctx.fillText(badgeText, bx + 14 * u, bby + 15.5 * u)
+    ctx.font = badgeFont
+    ctx.fillText(badgeText, bx + 13 * u, bby + 15.5 * u)
   }
 
   ctx.textBaseline = 'alphabetic'

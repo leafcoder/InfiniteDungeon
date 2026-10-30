@@ -120,21 +120,22 @@ function buildHeroRows(sm, refresh) {
     let tagColor = '#FFD86E'
     if (using) { tag = '使用中'; tagColor = '#FFC15E' }
     else if (avail) { tag = '点按切换'; tagColor = '#6FE3D2' }
-    else if (h.by === 'stars') tag = '⭐ ' + h.need
-    else if (h.by === 'clears') tag = '通关 ' + h.need
-    else if (h.by === 'ad') tag = '看广告'
-    else tag = h.price + '✦'
-    // 未达成条件时副标题附带当前进度，让"还差多少"一眼可见
+    else if (h.by === 'stars') { tag = '还差 ' + Math.max(0, h.need - stats.stars) + ' 星'; tagColor = '#9AA0C8' }
+    else if (h.by === 'clears') { tag = '还差 ' + Math.max(0, h.need - stats.clears) + ' 关'; tagColor = '#9AA0C8' }
+    else if (h.by === 'ad') { tag = '看广告'; tagColor = '#9AA0C8' }
+    else { tag = h.price + '✦' }
+    // 副标题恒为一句短文案（≤11 字），进度走 tag，特性名并入标题——避免超出行卡宽度
     let sub = h.desc
-    if (!avail && h.by === 'stars') sub += '（当前 ' + stats.stars + ' 星）'
-    if (!avail && h.by === 'clears') sub += '（当前 ' + stats.clears + ' 关）'
-    // 英雄微特性（N5）：随身天赋，换装即生效
     const trait = storage.HERO_TRAITS[h.id]
-    if (trait) sub += ' · 特性「' + trait.name + '」' + trait.desc
+    let title = h.name
+    if (trait && avail) {
+      title += ' · ' + trait.name
+      sub = trait.desc
+    }
     return {
       hero: h.pal,            // 英雄小人 chip（调色板驱动），比抽象图标更直观
       icCol: h.pal.tunic,
-      title: h.name,
+      title: title,
       sub: sub,
       tag: tag,
       tagColor: tagColor,
@@ -756,19 +757,19 @@ function showCode(sm, startFn, onClose) {
       })
     })
     rows.push({ header: '词缀 · 点选叠加' })
-    weekly.MODS.forEach(function (m) {
-      const on = state.mods.indexOf(m.key) !== -1
+    weekly.MODS.forEach(function (mod) {
+      const on = state.mods.indexOf(mod.key) !== -1
       rows.push({
         ick: on ? 'check' : 'plus',
         icCol: on ? '#6FE3D2' : '#9AA0C8',
-        title: m.name + ' · ' + m.desc,
+        title: mod.name + ' · ' + mod.desc,
         sub: on ? '点击移除' : '提高难度，通关更刺激',
         tag: on ? '已添加' : '添加',
         tagColor: on ? '#6FE3D2' : '#9AA0C8',
         dim: false,
         onTap: function (m) {
-          if (on) state.mods = state.mods.filter(function (k) { return k !== m.key })
-          else state.mods.push(m.key)
+          if (on) state.mods = state.mods.filter(function (k) { return k !== mod.key })
+          else state.mods.push(mod.key)
           build(m)
         }
       })
