@@ -16,6 +16,7 @@ const ad = require('../core/ad')
 const endless = require('../core/endless')
 const festival = require('../core/festival')
 const Icons = require('../ui/Icons')
+const club = require('../ui/gameclub')
 const Modals = require('./Modals')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
@@ -106,6 +107,12 @@ HomeScene.prototype.enter = function () {
       onTap: function () { self.openEntry(def.key) }
     }))
   })
+
+  // 游戏圈入口（原生控件）：与顶栏图标行同线；不支持/空间不足静默跳过
+  try {
+    const cRect = club.rectFor(u, this.pillRect, W - 16 * u - ibD - 4 * (ibD + ibGap))
+    this._club = (cRect && club.show(cRect)) ? club : null
+  } catch (e) { this._club = null }
 
   // ---- 底部锚点：Dock → CTA（先算底部，网格高度随之自适应） ----
   const dockY = H - SAB - 12 * u - 56 * u
@@ -598,7 +605,17 @@ HomeScene.prototype.openUnlock = function (lv) {
 
 /* ---------- 帧更新 ---------- */
 
+HomeScene.prototype.exit = function () {
+  // 游戏圈原生按钮浮于 Canvas 之上：离场必须销毁，否则残留到下一场景
+  if (this._club) { this._club.destroy(); this._club = null }
+}
+
 HomeScene.prototype.update = function (dt) {
+  // 游戏圈原生按钮显隐同步：弹窗/广告模拟/转场期间隐藏（原生控件盖在 Canvas 上）
+  if (this._club) {
+    const blocked = !!(this.modal || this.adSim || this.sm.trans)
+    if (blocked) this._club.hide(); else this._club.reveal()
+  }
   if (this.adSim) {
     if (this.adSim.update()) this.adSim = null
     return
