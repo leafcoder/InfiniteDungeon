@@ -294,10 +294,19 @@ function showSettings(sm, onClose) {
 function confirmReset(sm, back) {
   return new Modal(sm, {
     title: '重置进度？',
-    lines: [L('将清空所有关卡通关记录、皮肤与光尘（广告解锁的关卡保留）。此操作不可撤销。', { s: 12 })],
+    lines: [L('将清空通关记录、探索度、光尘、皮肤、英雄、天赋、技能、成就与图鉴。广告解锁的关卡、系统设置与每日/周挑战历史保留。此操作不可撤销。', { s: 12 })],
     buttons: [
-      { label: '确认重置', primary: true, onTap: function () { storage.resetProgress(); sm.toast('进度已重置'); sm.sceneModal(back()) } },
-      { label: '取消', onTap: function () { sm.sceneModal(back()) } }
+      {
+        label: '确认重置', primary: true,
+        onTap: function () {
+          storage.resetProgress()
+          sm.toast('进度已重置')
+          // 重建首页：switch 重入会 exit+enter，全部数据与布局从存档重读，
+          // 避免弹窗关闭后首页仍显示重置前的旧缓存（光尘/关卡/皮肤）
+          sm.switch('home')
+        }
+      },
+      { label: '取消', onTap: function () { back() } }
     ]
   })
 }

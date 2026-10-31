@@ -466,9 +466,21 @@ function completeLevel(level, rec) {
 
 function resetProgress() {
   saveProgress({ unlocked: 1, completed: {} });
-  try {
-    wx.removeStorageSync(EXPLORE_KEY); // 探索度与通关记录绑定，一并清空（天赋/皮肤等光尘资产保留）
-  } catch (e) {}
+  // 完整重置（与确认弹窗文案一致）：通关记录、探索度、光尘、皮肤、英雄、天赋、
+  // 技能、补给站升级、成就、统计、图鉴、口令历史、连击、每日幽灵、节日/教学 flag、试用
+  // 保留：广告解锁关卡（AD_KEY）、系统设置（SET_KEY）、首次启动标记（TUT_KEY）、
+  //       开屏剧情（STORY_KEY）、每日/周挑战历史（时间性记录，重置无意义）
+  // 注：用字符串字面量而非 KEY 变量——本函数声明位置早于部分 KEY 的 const 声明（TDZ）
+  const keys = [
+    'maze_explore_v1', 'maze_dust_v1', 'maze_skins_v1', 'maze_upgrades_v1',
+    'maze_theme_v1', 'maze_hero_v1', 'maze_heroes_v1', 'maze_talent_v1',
+    'maze_stats_v1', 'maze_ach_v1', 'maze_codex_v1', 'maze_codehist_v1',
+    'maze_codebest_v1', 'maze_combo_v1', 'maze_ghost_v1', 'maze_flags_v1',
+    'maze_trial_v1', 'maze_skills_v1'
+  ];
+  for (let i = 0; i < keys.length; i++) {
+    try { wx.removeStorageSync(keys[i]) } catch (e) {}
+  }
 }
 
 /* ============ 连击（连续通关，失败清零，用于光尘加成） ============ */
