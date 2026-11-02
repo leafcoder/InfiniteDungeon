@@ -14,8 +14,19 @@ const AD_UNIT_ID = 'adunit-bbcd2443a128df92';
 
 let rewardedAd = null;
 
-// 是否处于开发模拟模式（ID 为空时）
-const AD_DEV = !AD_UNIT_ID;
+// 开发者工具模拟器不支持真实广告填充（operateWXDataForAd:fail system apperror），
+// 检测到 devtools 时回落 DEV 模拟广告页；真机（预览/体验版/正式版）走真实广告。
+// 注意：真机调试仍可能上报 platform='devtools'，真实广告请用「预览」验证。
+function isDevtools() {
+  try {
+    if (typeof wx === 'undefined' || !wx.getSystemInfoSync) return false;
+    const sys = wx.getSystemInfoSync();
+    return !!sys && sys.platform === 'devtools';
+  } catch (e) { return false; }
+}
+
+// 是否处于开发模拟模式（ID 为空 或 开发者工具模拟器）
+const AD_DEV = !AD_UNIT_ID || isDevtools();
 
 function ensureAd() {
   if (rewardedAd) return rewardedAd;
@@ -84,6 +95,7 @@ function _reset() { rewardedAd = null; }
 
 module.exports = {
   AD_DEV: AD_DEV,
+  isDevtools: isDevtools,
   showRewarded: showRewarded,
   _reset: _reset
 };

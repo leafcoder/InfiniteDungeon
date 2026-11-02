@@ -35,6 +35,16 @@ function setWx(mock) {
   console.log('--- 1. 真实广告位对接 ---');
   T('AD_UNIT_ID 已填，AD_DEV=false（真实广告模式）', ad.AD_DEV === false);
 
+  console.log('--- 1b. devtools 模拟器检测 ---');
+  global.wx = { getSystemInfoSync: () => ({ platform: 'devtools' }) };
+  T('platform=devtools → 识别为模拟器', ad.isDevtools() === true);
+  global.wx = { getSystemInfoSync: () => ({ platform: 'ios' }) };
+  T('platform=ios → 真机', ad.isDevtools() === false);
+  global.wx = { getSystemInfoSync: () => { throw new Error('boom'); } };
+  T('getSystemInfoSync 抛异常 → 安全返回 false', ad.isDevtools() === false);
+  global.wx = {};
+  T('无 getSystemInfoSync → 安全返回 false', ad.isDevtools() === false);
+
   console.log('--- 2. 单例 + 创建即预加载 ---');
   let created = 0;
   let preloadN = 0;
