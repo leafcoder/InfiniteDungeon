@@ -80,8 +80,13 @@ function buildSkinRows(sm, refresh) {
 
 // 看广告解锁皮肤确认页（光尘不足时的免费替代路径）
 function adUnlockSkin(sm, k, t, reopen) {
-  const finish = function (ok) {
-    if (!ok) { sm.toast('广告未看完，未能解锁'); reopen(); return }
+  const finish = function (ok, why) {
+    if (!ok) {
+      if (why === 'daily') sm.toast('今日广告次数已达上限（' + ad.DAILY_LIMIT + ' 次/日）')
+      else if (why === 'interval') sm.toast('操作太频繁，请 ' + ad.freqState().nextInSec + ' 秒后再试')
+      else sm.toast('广告未看完，未能解锁')
+      reopen(); return
+    }
     storage.unlockSkin(k)
     storage.setTheme(k)
     sm.toast('广告解锁成功：' + t.label)
@@ -91,6 +96,7 @@ function adUnlockSkin(sm, k, t, reopen) {
     title: '免费解锁「' + t.label + '」',
     lines: [
       L('光尘不足？观看一段广告即可免费解锁该皮肤，解锁后立即穿上。', { s: 12.5 }),
+      L('今日剩余广告次数 ' + ad.freqState().remain + '/' + ad.DAILY_LIMIT, { s: 10.5, c: '#9AA0C8' }),
       L(''),
       L('✦ 也可继续攒光尘（' + t.price + '✦）解锁，通关 / 每日挑战 / 广告均可获取。', { s: 11, c: '#9AA0C8' })
     ],
@@ -174,8 +180,13 @@ function buildHeroRows(sm, refresh) {
 
 // 看广告解锁英雄确认页（ad 类直接入口；dust 类光尘不足时的免费替代路径）
 function adUnlockHero(sm, h, reopen) {
-  const finish = function (ok) {
-    if (!ok) { sm.toast('广告未看完，未能解锁'); reopen(); return }
+  const finish = function (ok, why) {
+    if (!ok) {
+      if (why === 'daily') sm.toast('今日广告次数已达上限（' + ad.DAILY_LIMIT + ' 次/日）')
+      else if (why === 'interval') sm.toast('操作太频繁，请 ' + ad.freqState().nextInSec + ' 秒后再试')
+      else sm.toast('广告未看完，未能解锁')
+      reopen(); return
+    }
     storage.unlockHero(h.id)
     storage.setHero(h.id)
     sm.toast('广告解锁成功：' + h.name)
@@ -186,6 +197,7 @@ function adUnlockHero(sm, h, reopen) {
     title: '解锁英雄「' + h.name + '」' + priceTip,
     lines: [
       L('观看一段广告即可免费解锁该英雄，解锁后立即换上。', { s: 12.5 }),
+      L('今日剩余广告次数 ' + ad.freqState().remain + '/' + ad.DAILY_LIMIT, { s: 10.5, c: '#9AA0C8' }),
       L(''),
       L('造型与主题皮肤相互独立，随时可在皮肤弹窗中切换。', { s: 11, c: '#9AA0C8' })
     ],

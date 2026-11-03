@@ -571,9 +571,14 @@ HomeScene.prototype.openUnlock = function (lv) {
     self.showToast('已解锁第 ' + lv + ' 关')
     fx.burst(self.sm.W / 2, self.gz.y + 40 * self.u, { n: 16, colors: ['#FFD86E', '#6FE3D2'], speed: 130, size: 2.8 })
   }
-  const finish = function (ok) {
+  const finish = function (ok, why) {
     self._unlockBusy = false
-    if (!ok) { self.showToast('广告未看完，未能解锁'); return }
+    if (!ok) {
+      if (why === 'daily') self.showToast('今日广告次数已达上限（' + ad.DAILY_LIMIT + ' 次/日）')
+      else if (why === 'interval') self.showToast('操作太频繁，请 ' + ad.freqState().nextInSec + ' 秒后再试')
+      else self.showToast('广告未看完，未能解锁')
+      return
+    }
     succeed()
   }
   const watchAd = function () {
@@ -592,6 +597,7 @@ HomeScene.prototype.openUnlock = function (lv) {
       { t: '该关卡尚未通关解锁，可选择：', s: 13 },
       { t: '', gap: true },
       { t: '▶ 观看一段广告，免费立即解锁', c: '#FFD86E', b: true, s: 12.5 },
+      { t: '今日剩余广告次数 ' + ad.freqState().remain + '/' + ad.DAILY_LIMIT, c: '#9AA0C8', s: 10.5 },
       { t: '✦ 花费 ' + UNLOCK_DUST_COST + ' 光尘直接解锁（通关/每日获取，不可充值）', c: '#9AA0C8', s: 11.5 }
     ],
     buttons: [

@@ -846,8 +846,11 @@ GameScene.prototype.showReviveAd = function () {
     self.core.revive()
     self.overlay = null
   }
-  const handled = ad.showRewarded(function (ok) {
-    if (ok) applyRevive()
+  const handled = ad.showRewarded(function (ok, why) {
+    if (ok) { applyRevive(); return; }
+    // 频次拦截反馈（官方合规：每日上限 / 两次间隔）
+    if (why === 'daily') self.sm.toast('今日广告次数已达上限（' + ad.DAILY_LIMIT + ' 次/日）');
+    else if (why === 'interval') self.sm.toast('操作太频繁，请 ' + ad.freqState().nextInSec + ' 秒后再试');
   })
   if (!handled) {
     // DEV 模拟广告页
