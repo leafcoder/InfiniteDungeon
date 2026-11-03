@@ -45,16 +45,20 @@ function setWx(mock) {
   global.wx = {};
   T('无 getSystemInfoSync → 安全返回 false', ad.isDevtools() === false);
 
-  console.log('--- 1c. devtools 联调开关（本地开发拉真实广告） ---');
+  console.log('--- 1c. 非生产环境回落 DEV 模拟广告页 ---');
   {
-    // 以 platform=devtools 环境重新加载一份干净模块实例，验证开关行为
+    // 以 platform=devtools 环境重新加载一份干净模块实例，验证回落行为
     const adPath = require.resolve(path.join(ROOT, 'core/ad.js'));
     global.wx = { getSystemInfoSync: () => ({ platform: 'devtools' }) };
     delete require.cache[adPath];
     const ad2 = require(path.join(ROOT, 'core/ad.js'));
-    T('DEVTOOLS_REAL_AD=true（联调开关默认开）', ad2.DEVTOOLS_REAL_AD === true);
-    T('模拟器 + 开关开启 → AD_DEV=false（拉真实广告）', ad2.AD_DEV === false);
-    // 恢复模拟器回落路径的期望行为说明：开关置 false 时 AD_DEV 才为 true（人工验证，需改源码常量）
+    T('模拟器（devtools）→ AD_DEV=true（回落模拟页，不拉真实广告）', ad2.AD_DEV === true);
+    T('模拟器 showRewarded 返回 false（页面层走模拟广告页）', ad2.showRewarded(() => {}) === false);
+    // 真机环境：恢复真实广告模式
+    delete require.cache[adPath];
+    global.wx = { getSystemInfoSync: () => ({ platform: 'android' }) };
+    const ad3 = require(path.join(ROOT, 'core/ad.js'));
+    T('真机（android）→ AD_DEV=false（真实广告模式）', ad3.AD_DEV === false);
     delete require.cache[adPath];
     global.wx = {};
   }

@@ -73,8 +73,10 @@ function recordShown(now) {
 
 let rewardedAd = null;
 
-// 模拟器检测：devtools（开发者工具模拟器 / 真机调试模式都上报 devtools）。
-// 是否回落 DEV 模拟页由 DEVTOOLS_REAL_AD 联调开关决定，见下方说明。
+// 非生产环境判定：开发者工具模拟器 / 真机调试模式都上报 platform='devtools'，
+// 一律回落 DEV 模拟广告页（规避 operateWXDataForAd 内部报错 + 不消耗真实曝光）；
+// 真机预览 / 体验版 / 正式版上报 ios/android，走真实广告。
+// 注意：真机调试也算非生产环境，验证真实广告请用「预览」。
 function isDevtools() {
   try {
     if (typeof wx === 'undefined' || !wx.getSystemInfoSync) return false;
@@ -83,15 +85,8 @@ function isDevtools() {
   } catch (e) { return false; }
 }
 
-// 开发者工具/真机调试联调开关：
-//   true  → 模拟器（platform=devtools）也拉真实广告（本地联调；若工具内无填充
-//           会走「load 重试 → cb(false)」失败分支并提示，最终以真机预览为准）
-//   false → 模拟器回落 DEV 模拟广告页（规避 operateWXDataForAd 内部报错，
-//           适合只调流程不调广告的阶段）
-const DEVTOOLS_REAL_AD = true;
-
-// 是否处于开发模拟模式（ID 为空，或处于模拟器且联调开关关闭）
-const AD_DEV = !AD_UNIT_ID || (isDevtools() && !DEVTOOLS_REAL_AD);
+// 是否处于开发模拟模式：ID 为空（未配置）或处于非生产环境（模拟器/真机调试）
+const AD_DEV = !AD_UNIT_ID || isDevtools();
 
 function ensureAd() {
   if (rewardedAd) return rewardedAd;
@@ -173,7 +168,6 @@ function _reset() {
 
 module.exports = {
   AD_DEV: AD_DEV,
-  DEVTOOLS_REAL_AD: DEVTOOLS_REAL_AD,
   DAILY_LIMIT: DAILY_LIMIT,
   MIN_INTERVAL_MS: MIN_INTERVAL_MS,
   freqState: freqState,
