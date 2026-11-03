@@ -28,6 +28,9 @@ function makeSM() {
 
 console.log('--- 反馈1：活动横幅位置 ---');
 {
+  // 显式注入万圣节（与真实日期解耦：活动窗口 10-24~11-02，其余日期自动命中会失败）
+  const real = festival.getActive;
+  festival.getActive = () => festival.FESTIVALS[0];
   const hs = new HomeScene(makeSM());
   hs.enter();
   T('活动期横幅存在（万圣节期）', !!hs.festRect && !!hs.fest);
@@ -36,8 +39,7 @@ console.log('--- 反馈1：活动横幅位置 ---');
   T('圆点行在横幅下方不重叠', hs.dotsRect().y >= hs.festRect.y + hs.festRect.h);
   T('网格在圆点行下方不重叠', hs.gz.y >= hs.dotsRect().y + 8);
   T('横幅命中区域生效', hs.inFestPill(hs.festRect.x + 20, hs.festRect.y + 10));
-  // 空档期：布局回退（圆点/网格位置与无活动一致）
-  const real = festival.getActive;
+  // 空档期：布局回退（圆点/网格位置与无活动一致）；real 已在块首保存
   festival.getActive = () => null;
   const hs2 = new HomeScene(makeSM());
   hs2.enter();

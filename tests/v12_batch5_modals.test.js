@@ -8,6 +8,7 @@ global.wx = {
   removeStorageSync: (k) => { delete mem[k]; }
 };
 const storage = require(path.join(ROOT, 'core/storage.js'));
+const festival = require(path.join(ROOT, 'core/festival.js'));
 const Modals = require(path.join(ROOT, 'scene/Modals.js'));
 
 let pass = 0, fail = 0;
@@ -54,7 +55,11 @@ function makeSM() {
 // showFestival / showEndless
 {
   const sm = makeSM();
+  // 显式注入万圣节（与真实日期解耦：活动窗口 10-24~11-02）
+  const realGetActive = festival.getActive;
+  festival.getActive = () => festival.FESTIVALS[0];
   const mf = Modals.showFestival(sm, () => {}, () => {});
+  festival.getActive = realGetActive;
   T('活动弹窗构建（万圣节期）', !!mf && mf.title.indexOf('万圣夜巡游') >= 0);
   const me = Modals.showEndless(sm, () => {}, () => {});
   T('无尽塔弹窗构建', !!me && me.title.indexOf('无尽地宫塔') >= 0);

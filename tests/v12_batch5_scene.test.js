@@ -65,6 +65,9 @@ console.log('--- GameScene mode=endless ---');
 
 console.log('--- GameScene mode=festival ---');
 {
+  // 显式注入万圣节（与真实日期解耦：活动窗口 10-24~11-02，其余日期自动命中会失败）
+  const realGetActive = festival.getActive;
+  festival.getActive = () => festival.FESTIVALS[0];
   const gs = new GameScene(makeSM());
   gs.enter({ mode: 'festival', festIdx: 0 });
   T('自动命中当前活动（万圣节）', gs.fest && gs.fest.id === 'halloween');
@@ -75,6 +78,7 @@ console.log('--- GameScene mode=festival ---');
 
   const gs2 = new GameScene(makeSM());
   gs2.enter({ mode: 'festival', festIdx: 2 });
+  festival.getActive = realGetActive;
   T('活动关 3 level 95', gs2.level === 95);
 
   const gs3 = new GameScene(makeSM());

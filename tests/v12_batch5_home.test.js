@@ -28,9 +28,12 @@ function makeSM() {
   };
 }
 
-// 万圣节期间（当前日期自动命中）
+// 活动期（显式注入万圣节，测试与真实日期解耦——活动窗口 10-24~11-02，其余日期会命中失败）
+const realGetActive = festival.getActive;
+festival.getActive = () => festival.FESTIVALS[0];
 const hs = new HomeScene(makeSM());
 hs.enter();
+festival.getActive = realGetActive;
 T('活动命中 → fest 注入', !!hs.fest && hs.fest.id === 'halloween');
 T('festRect 存在', !!hs.festRect);
 T('festRect 在 Hero 卡下方（无重叠）', hs.festRect.y >= hs.hero.y + hs.hero.h);
@@ -41,8 +44,7 @@ T('dock 触摸热区宽 ≥44px（88rpx 规范）', hs.dock[0].w >= 44);
 T('命中判定 inFestPill', hs.inFestPill(hs.festRect.x + 5, hs.festRect.y + 5));
 T('胶囊外命中 false', !hs.inFestPill(10, 10));
 
-// 空档期无活动
-const realGetActive = festival.getActive;
+// 空档期无活动（realGetActive 已在块首保存）
 festival.getActive = () => null;
 const hs2 = new HomeScene(makeSM());
 hs2.enter();
@@ -61,9 +63,12 @@ for (let i = 1; i <= 120; i++) storage.completeLevel(i, { time: 9, steps: 9, swi
 hs3.openEntry('endless');
 T('解锁后点无尽塔 → 弹窗', !!hs3.modal);
 
-// openFest → 弹活动弹窗
+// openFest → 弹活动弹窗（openFest 依赖 enter 时捕获的 this.fest，showFestival 内部也取 getActive，均需注入）
 hs3.modal = null;
+hs3.fest = festival.FESTIVALS[0];
+festival.getActive = () => festival.FESTIVALS[0];
 hs3.openFest();
+festival.getActive = realGetActive;
 T('活动弹窗弹出', !!hs3.modal);
 
 console.log('');
