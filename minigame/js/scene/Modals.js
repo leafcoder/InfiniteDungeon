@@ -105,8 +105,9 @@ function adUnlockSkin(sm, k, t, reopen) {
         label: '▶ 看广告解锁', primary: true,
         onTap: function () {
           const handled = ad.showRewarded(finish)
-          // 无广告位（DEV）时走模拟广告页；adSim 须挂到当前场景（sceneAd），场景才会驱动 update/draw
-          if (!handled) sm.sceneAd(new AdSim(sm, finish, '解锁皮肤：' + t.label))
+          // 无广告位（DEV）时走模拟广告页；打开即计数（recordShown，与真实广告口径一致）；
+          // adSim 须挂到当前场景（sceneAd），场景才会驱动 update/draw
+          if (!handled) { ad.recordShown(); sm.sceneAd(new AdSim(sm, finish, '解锁皮肤：' + t.label)) }
         }
       },
       { label: '取消', onTap: reopen }
@@ -206,7 +207,8 @@ function adUnlockHero(sm, h, reopen) {
         label: '▶ 看广告解锁', primary: true,
         onTap: function () {
           const handled = ad.showRewarded(finish)
-          if (!handled) sm.sceneAd(new AdSim(sm, finish, '解锁英雄：' + h.name))
+          // 打开模拟页即计数（与真实广告口径一致）
+          if (!handled) { ad.recordShown(); sm.sceneAd(new AdSim(sm, finish, '解锁英雄：' + h.name)) }
         }
       },
       { label: '取消', onTap: reopen }

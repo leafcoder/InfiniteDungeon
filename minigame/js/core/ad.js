@@ -120,15 +120,16 @@ function asPromise(p) {
 
 // 拉起激励视频；cb(ok, why)，ok=true 表示完整看完（isEnded）。
 // why 仅在 ok=false 时可能给出：'daily'（今日次数已达上限）/ 'interval'（距上次展示间隔不足）。
-// 返回 false 表示当前处于 DEV 模拟模式，需由页面层自行展示模拟广告页。
+// 返回 false 表示当前处于 DEV 模拟模式：页面层展示模拟广告页（AdSim），
+// 打开模拟页即视为一次展示，页面层须立即调用 ad.recordShown() 计数（与真实广告口径一致）。
 function showRewarded(cb) {
-  if (AD_DEV) return false;
-  // 频次前置校验：超限/间隔不足直接回调失败，不拉起广告（官方频次合规）
+  // 频次前置校验（DEV 模拟与真实广告同口径）：超限/间隔不足直接回调失败，不展示
   const st = freqState();
   if (!st.canShow) {
     try { cb(false, st.reason); } catch (e) {}
     return true;
   }
+  if (AD_DEV) return false;
   const ad = ensureAd();
   if (!ad) { cb(false); return true; }
   const onShown = function () { recordShown(); }; // 展示成功即计数（无论看完与否）

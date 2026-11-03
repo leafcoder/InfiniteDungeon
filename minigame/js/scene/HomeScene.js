@@ -585,7 +585,7 @@ HomeScene.prototype.openUnlock = function (lv) {
     if (self._unlockBusy) return
     self._unlockBusy = true
     const handled = ad.showRewarded(finish)
-    if (!handled) self.adSim = new AdSim(self.sm, finish, '解锁第 ' + lv + ' 关')
+    if (!handled) { ad.recordShown(); self.adSim = new AdSim(self.sm, finish, '解锁第 ' + lv + ' 关') }
   }
   const buyDust = function () {
     if (storage.spendDust(UNLOCK_DUST_COST)) succeed()

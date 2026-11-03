@@ -107,6 +107,43 @@ const FREQ_KEY = 'maze_ad_freq_v1';
   await tick(); await tick();
   T('两次 show 均失败 → cb(false) 且不计数', cbArg[0] === false && ad.freqState().count === 0);
 
+  console.log('--- 9. DEV 模拟页同口径（非生产环境也走频控） ---');
+  {
+    // 以 devtools 环境重载干净模块实例（AD_DEV=true），存储 mock 共用
+    const adPath = require.resolve('../minigame/js/core/ad.js');
+    global.wx.getSystemInfoSync = () => ({ platform: 'devtools' });
+    delete require.cache[adPath];
+    const dev = require('../minigame/js/core/ad.js');
+    T('devtools 实例 AD_DEV=true', dev.AD_DEV === true);
+
+    // 频控超限：DEV 模式同样拦截（校验先于 DEV 判断）
+    store[FREQ_KEY] = { d: todayStr(), n: 3, t: Date.now() - 120000 };
+    cbArg = null;
+    const h1 = dev.showRewarded(function (ok, why) { cbArg = [ok, why]; });
+    T('DEV 模式每日超限 → 拦截 cb(false,"daily")', h1 === true && cbArg[0] === false && cbArg[1] === 'daily');
+
+    // 间隔不足：DEV 模式同样拦截
+    store[FREQ_KEY] = { d: todayStr(), n: 1, t: Date.now() - 10000 };
+    cbArg = null;
+    const h2 = dev.showRewarded(function (ok, why) { cbArg = [ok, why]; });
+    T('DEV 模式间隔不足 → 拦截 cb(false,"interval")', h2 === true && cbArg[0] === false && cbArg[1] === 'interval');
+
+    // 频控放行：返回 false（页面层开模拟页），页面调 recordShown 后计数 +1
+    store[FREQ_KEY] = null;
+    let opened = false;
+    const h3 = dev.showRewarded(function () { opened = true; });
+    T('DEV 模式放行 → 返回 false（页面层展示模拟页）', h3 === false && opened === false);
+    dev.recordShown();
+    T('模拟页打开即计数 → count=1', dev.freqState().count === 1);
+    // 模拟页刚展示完，立即再触发应被间隔拦截
+    cbArg = null;
+    const h4 = dev.showRewarded(function (ok, why) { cbArg = [ok, why]; });
+    T('模拟页展示后 60s 内再触发 → 间隔拦截', h4 === true && cbArg[0] === false && cbArg[1] === 'interval');
+
+    delete global.wx.getSystemInfoSync;
+    delete require.cache[adPath];
+  }
+
   console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败');
   process.exit(failed ? 1 : 0);
 })();

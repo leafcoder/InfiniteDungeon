@@ -853,7 +853,8 @@ GameScene.prototype.showReviveAd = function () {
     else if (why === 'interval') self.sm.toast('操作太频繁，请 ' + ad.freqState().nextInSec + ' 秒后再试');
   })
   if (!handled) {
-    // DEV 模拟广告页
+    // DEV 模拟广告页：打开即视为一次展示，计入频控（与真实广告口径一致）
+    ad.recordShown()
     this.adSim = new AdSim(this.sm, function (ok) { if (ok) applyRevive() }, '发放复活奖励…')
   }
 }
