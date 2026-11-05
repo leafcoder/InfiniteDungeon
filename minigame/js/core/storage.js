@@ -59,6 +59,15 @@ function taskMod() {
   return _taskMod || null
 }
 
+// 赛季模块（season.js 静态 require 本模块，同样走懒加载防环）
+let _seasonMod = null
+function seasonMod() {
+  if (_seasonMod === null) {
+    try { _seasonMod = require('./season') } catch (e) { _seasonMod = false }
+  }
+  return _seasonMod || null
+}
+
 function addDust(n) {
   const v = Math.max(0, getDust() + n);
   try {
@@ -474,6 +483,8 @@ function completeLevel(level, rec) {
   saveProgress(p);
   const tm = taskMod();
   if (tm && tm.onClear) { try { tm.onClear() } catch (e) {} }
+  const sm2 = seasonMod();
+  if (sm2 && sm2.addXp) { try { sm2.addXp(20) } catch (e) {} }
   return { progress: p, isNew: better };
 }
 
@@ -490,7 +501,8 @@ function resetProgress() {
     'maze_stats_v1', 'maze_ach_v1', 'maze_codex_v1', 'maze_codehist_v1',
     'maze_codebest_v1', 'maze_combo_v1', 'maze_ghost_v1', 'maze_flags_v1',
     'maze_trial_v1', 'maze_skills_v1',
-    'maze_task_v1', 'maze_coupon_v1', 'maze_shard_v1', 'maze_cosmetics_v1', 'maze_task_track_v1'
+    'maze_task_v1', 'maze_coupon_v1', 'maze_shard_v1', 'maze_cosmetics_v1', 'maze_task_track_v1',
+    'maze_season_v1'
   ];
   for (let i = 0; i < keys.length; i++) {
     try { wx.removeStorageSync(keys[i]) } catch (e) {}
@@ -762,6 +774,8 @@ function completeDaily(date, rec) {
   if (bonus > 0) addDust(bonus);
   const tm = taskMod();
   if (tm && tm.onClear) { try { tm.onClear() } catch (e) {} }
+  const sm3 = seasonMod();
+  if (sm3 && sm3.addXp) { try { sm3.addXp(40) } catch (e) {} }
   return { better: better, streak: streak, bonus: bonus, newAch: newAch };
 }
 

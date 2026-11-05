@@ -76,11 +76,13 @@ const FULL_STREAK = [
 const COSMETIC_META = {
   frame: {
     '登塔者': { desc: '无尽塔登顶者的荣光', color: '#E36BFF' },
-    '不熄之志': { desc: '连续 7 天全勤的证明', color: '#FF9E4A' }
+    '不熄之志': { desc: '连续 7 天全勤的证明', color: '#FF9E4A' },
+    '探渊行者': { desc: '赛季征程 Lv.10 限定头像框', color: '#4AC8FF' }
   },
   title: {
     '地宫常驻': { desc: '每周任务全勤限定称号', color: '#FFC15E' },
-    '地宫守望': { desc: '连续 14 天全勤限定称号', color: '#6FE3D2' }
+    '地宫守望': { desc: '连续 14 天全勤限定称号', color: '#6FE3D2' },
+    '深渊纪年': { desc: '赛季征程 Lv.25 限定称号', color: '#E36BFF' }
   }
 }
 function cosmeticMeta(kind, id) {
@@ -239,12 +241,16 @@ function onGameClubTap() {
   const s = ensure()
   addProgress(s.daily, 'D3', 1)
   save(s)
+  // 赛季 XP：打卡也是一次回访行为，给小额进度（懒加载避免 season→task 静态环）
+  try { const sn = require('./season'); if (sn && sn.addXp) sn.addXp(5) } catch (e) {}
 }
 function onEndlessDepth(d) {
   if (!d || d <= 0) return
   const s = ensure()
   const w1 = s.weekly.filter(function (x) { return x.id === 'W1' })[0]
   if (w1 && !w1.claimed && d > w1.progress) { w1.progress = d; save(s) }
+  // 赛季 XP：仅刷新本赛季最深纪录时由 season.onDepth 内部判重发放
+  try { const sn = require('./season'); if (sn && sn.onDepth) sn.onDepth(d) } catch (e) {}
 }
 
 // ---- 状态查询 ----
@@ -302,6 +308,8 @@ function claim(id) {
   t.claimed = true
   save(s)
   storage.incTaskTrack('claim')
+  // 赛季 XP：领取任意任务奖励都给赛季进度（懒加载）
+  try { const sn = require('./season'); if (sn && sn.addXp) sn.addXp(15) } catch (e) {}
   const got = applyReward(def.reward)
   // 全勤判定（领取后）
   const st = getState()
@@ -399,5 +407,6 @@ module.exports = {
   getState: getState, hasClaimable: hasClaimable, claim: claim, track: track,
   shardNeed: shardNeed, trackSummary: trackSummary, dailyBrief: dailyBrief, streakInfo: streakInfo,
   justCompleted: justCompleted,
-  cosmeticMeta: cosmeticMeta
+  cosmeticMeta: cosmeticMeta,
+  applyReward: applyReward
 }

@@ -4,6 +4,7 @@
  * 可领取项高亮「领取」并点击发放，领取后重建面板刷新状态与全勤进度。
  */
 const task = require('../core/task')
+const season = require('../core/season')
 const Modal = require('../ui/Modal')
 
 function rewardText(rw) {
@@ -87,6 +88,42 @@ function build(sm, onClose, isRefresh) {
 
   if (st.dailyFull) rows.push({ icon: 'leaf', title: '每日全勤达成', sub: '已发放皮肤碎片 ×' + task.FULL_DAILY.shard, tag: '✓', tagColor: '#6FE3D2', dim: true })
   if (st.weeklyFull) rows.push({ icon: 'crown', title: '每周全勤达成', sub: '已发放限定称号', tag: '✓', tagColor: '#6FE3D2', dim: true })
+
+  // ---- 赛季征程（免费通行证）：把日常/周常/无尽塔行为串进同一个 30 天目标 ----
+  const sea = season.info()
+  rows.push({
+    icon: 'tower',
+    title: '【第 ' + sea.season + ' 赛季 · 第 ' + sea.day + '/' + sea.totalDays + ' 天】',
+    sub: sea.left > 0 ? ('还剩 ' + sea.left + ' 天 · 赛季结束未领奖励失效') : '本赛季最后一日 · 尽快领取',
+    tag: '', tagColor: '#E36BFF', dim: true
+  })
+  rows.push({
+    icon: 'spark',
+    title: '赛季 Lv.' + sea.level + '/' + sea.maxLevel,
+    sub: sea.level >= sea.maxLevel ? '已满级 · ' + sea.claimable.length + ' 项待领' : ('本级进度 ' + sea.into + '/' + sea.perLevel + ' · 通关/任务/无尽塔可得赛季经验'),
+    tag: sea.claimable.length > 0 ? sea.claimable.length + ' 项可领' : '进行中',
+    tagColor: sea.claimable.length > 0 ? '#FFC15E' : '#9AA0C8',
+    dim: sea.claimable.length === 0
+  })
+  // 已达标未领的等级逐级给领取行（上限 6 行防面板溢出，更早的先进度行提示总数）
+  sea.claimable.slice(0, 6).forEach(function (lv) {
+    const rw = sea.rewardFor(lv)
+    rows.push({
+      icon: 'spark',
+      title: '第 ' + lv + ' 级奖励',
+      sub: rewardText(rw),
+      tag: '领取', tagColor: '#FFC15E',
+      onTap: function (m) {
+        const r = season.claim(lv)
+        if (!r.ok) return
+        const msgs = []
+        r.got.forEach(function (g) { msgs.push(rewardText(g)) })
+        if (msgs.length) sm.toast('赛季奖励：' + msgs.join('，'))
+        if (m && m.close) m.close()
+        sm.sceneModal(build(sm, onClose, true))
+      }
+    })
+  })
 
   return new Modal(sm, {
     title: '任务',

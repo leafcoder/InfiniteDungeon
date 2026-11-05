@@ -155,7 +155,9 @@ function D(id) { return task.getState().daily.filter(t => t.id === id)[0]; }
   panel = TaskPanel.build(makeSM(), function () {}, true);
   head = panel.rows.filter(r => r.title.indexOf('【每日任务') >= 0)[0];
   T('切换寻常日后面板同步刷新', head && head.title.indexOf('寻常日') >= 0);
-  T('主题切换不影响任务行数', panel.rows.filter(r => /^【/.test(r.title)).length === 2);
+  // v1.10 起任务面板新增固定「赛季征程」分区（【第 N 赛季…】），故分区头总数为 3；
+  // 本断言意图是主题切换不改变任务分区结构，因此只数任务本身的两个分区头
+  T('主题切换不影响任务行数', panel.rows.filter(r => r.title.indexOf('【每日任务') === 0 || r.title.indexOf('【每周任务') === 0).length === 2);
 
   console.log('\n通过 ' + passed + ' / 失败 ' + failed);
   if (failed > 0) process.exit(1);
