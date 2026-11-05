@@ -18,6 +18,7 @@ const festival = require('../core/festival')
 const task = require('../core/task')
 const checkin = require('../core/checkin')
 const ngplus = require('../core/ngplus')
+const codex = require('../core/codex')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
 const TaskPanel = require('../scene/TaskPanel')
@@ -609,17 +610,19 @@ function showAch(sm, onClose) {
     ick: 'monster',
     icCol: '#FF7A92',
     title: '怪物遭遇 ' + monsterN + ' 种',
-    sub: '与各类怪物照面即收录',
+    sub: '与各类怪物照面即收录 · 点开查看图鉴',
     tag: monsterN >= 6 ? '收集达人' : '收集中',
-    tagColor: monsterN >= 6 ? '#6FE3D2' : '#9AA0C8'
+    tagColor: monsterN >= 6 ? '#6FE3D2' : '#9AA0C8',
+    onTap: function () { sm.sceneModal(showCodex(sm, onClose)) }
   })
   rows.push({
     ick: 'bag',
     icCol: '#FF9F6E',
     title: '道具拾取 ' + itemN + ' 种',
-    sub: '拾取道具与触发机关即收录',
+    sub: '拾取道具与触发机关即收录 · 点开查看图鉴',
     tag: itemN >= 8 ? '百宝箱' : '收集中',
-    tagColor: itemN >= 8 ? '#6FE3D2' : '#9AA0C8'
+    tagColor: itemN >= 8 ? '#6FE3D2' : '#9AA0C8',
+    onTap: function () { sm.sceneModal(showCodex(sm, onClose)) }
   })
   // 怪物伙伴（N8）：某类怪物遭遇满 10 次 → 结伴同行
   const partner = storage.getPartner()
@@ -821,6 +824,66 @@ function showNgPlus(sm, onEnter) {
       { label: btnLabel, primary: true, onTap: function () { onEnter() } },
       { label: '再想想' }
     ]
+  })
+}
+
+/* ---------- 怪物/道具图鉴（遭遇即收录，收集里程碑） ---------- */
+
+function showCodex(sm, onClose) {
+  const prog = codex.progress(function () { return storage.getCodex() })
+  const cx = storage.getCodex()
+  const rows = []
+  for (let g = 0; g < codex.GROUP_ORDER.length; g++) {
+    const gk = codex.GROUP_ORDER[g]
+    const gp = prog.byGroup[gk]
+    rows.push({ header: codex.GROUP_LABEL[gk] + ' ' + gp.got + '/' + gp.total })
+    const list = codex.byGroup(gk)
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i]
+      const n = cx[e.key] || 0
+      if (n > 0) {
+        rows.push({
+          ick: 'check',
+          icCol: e.color,
+          title: e.glyph + ' ' + e.name,
+          sub: e.desc,
+          tag: '×' + n,
+          tagColor: e.color
+        })
+      } else {
+        rows.push({
+          ick: 'lock',
+          icCol: '#9AA0C8',
+          title: '？？？',
+          sub: '尚未遭遇 · 游玩对应关卡即可收录',
+          tag: '未收录',
+          tagColor: '#9AA0C8',
+          dim: true
+        })
+      }
+    }
+  }
+  // 收集里程碑状态行
+  const msRows = codex.MILESTONES.map(function (ms) {
+    const got = !!storage.getFlag(ms.flag)
+    return {
+      ick: got ? 'rank' : 'lock',
+      icCol: got ? '#FFD86E' : '#9AA0C8',
+      title: '称号「' + ms.title + '」',
+      sub: got ? ('已达成 · ' + ms.desc) : ('达成条件：' + ms.desc + '（+' + ms.shard + ' 碎片）'),
+      tag: got ? '已达成' : '收集目标',
+      tagColor: got ? '#FFD86E' : '#9AA0C8',
+      dim: !got
+    }
+  })
+  return new Modal(sm, {
+    title: '地宫图鉴',
+    lines: [
+      L('收录 ' + prog.got + '/' + prog.total + ' · 与怪物照面、拾取道具、触发机关即自动收录', { b: true, c: '#7FD8FF', s: 13 })
+    ],
+    rows: [{ header: '收集里程碑' }].concat(msRows).concat(rows),
+    buttons: [{ label: '关闭' }],
+    onClose: onClose
   })
 }
 
@@ -1215,6 +1278,7 @@ module.exports = {
   showRank: showRank,
   showDaily: showDaily,
   showCheckin: showCheckin,
+  showCodex: showCodex,
   showNgPlus: showNgPlus,
   showWeekly: showWeekly,
   showCode: showCode,

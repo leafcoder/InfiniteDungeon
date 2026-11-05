@@ -84,7 +84,9 @@ const COSMETIC_META = {
     '地宫守望': { desc: '连续 14 天全勤限定称号', color: '#6FE3D2' },
     '晨昏与共': { desc: '连续签到 14 天限定称号', color: '#FFB46E' },
     '轮回行者': { desc: '开启轮回 NG+ 限定称号', color: '#E36BFF' },
-    '深渊纪年': { desc: '赛季征程 Lv.25 限定称号', color: '#E36BFF' }
+    '深渊纪年': { desc: '赛季征程 Lv.25 限定称号', color: '#E36BFF' },
+    '博物学家': { desc: '图鉴收录全部怪物', color: '#6FE3D2' },
+    '地宫学者': { desc: '图鉴全部收录', color: '#FFD86E' }
   }
 }
 function cosmeticMeta(kind, id) {

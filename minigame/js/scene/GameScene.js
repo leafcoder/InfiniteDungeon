@@ -14,6 +14,7 @@ const endless = require('../core/endless')
 const festival = require('../core/festival')
 const mutation = require('../core/mutation')
 const ngplus = require('../core/ngplus')
+const codex = require('../core/codex')
 const PlayCore = require('../core/play')
 const Modal = require('../ui/Modal')
 const Icons = require('../ui/Icons')
@@ -507,6 +508,8 @@ GameScene.prototype.handleEvent = function (ev) {
       try { storage.encounterCodex('m_alert') } catch (e) {}
       // 怪物分类遭遇计数（伙伴解锁数据源）
       if (d.kind) { try { storage.encounterCodex('m_' + d.kind) } catch (e) {} }
+      // 特殊怪图鉴收录（宝藏Boss / 守门怪）
+      if (d.special) { try { storage.encounterCodex('m_' + d.special) } catch (e) {} }
       break
     case 'skill':
       fx.shake(3, 0.18)
@@ -521,6 +524,13 @@ GameScene.prototype.handleEvent = function (ev) {
       this.snd('power')
       break
     case 'portal':
+    case 'rewind':
+      this.whiteFlash = 0.55
+      fx.to(this, { whiteFlash: 0 }, 400)
+      fx.ring(this.sm.W / 2, this.sm.H / 2, '#C79BFF', { speed: 420, life: 0.5 })
+      this.snd('power')
+      try { if (d && d.from) storage.encounterCodex('mach_portal') } catch (e) {}
+      break
     case 'rewind':
       this.whiteFlash = 0.55
       fx.to(this, { whiteFlash: 0 }, 400)
@@ -551,6 +561,8 @@ GameScene.prototype.handleEvent = function (ev) {
       fx.shake(2.2, 0.14)
       this.snd('power')
       try { storage.encounterCodex('m_kill') } catch (e) {}
+      // 击杀收录（守门怪可被魔弹击杀）
+      if (d.special) { try { storage.encounterCodex('m_' + d.special) } catch (e) {} }
       break
     }
     case 'bossStun':
@@ -560,6 +572,7 @@ GameScene.prototype.handleEvent = function (ev) {
       break
     case 'secret':
       storage.addDust(d.dust || 5)
+      try { storage.encounterCodex('mach_secret') } catch (e) {}
       fx.text(this.sm.W / 2, this.view.by + this.view.bh * 0.3, '✦ 隐藏密室 +' + (d.dust || 5), '#FFD86E', { size: 15 * this.u, life: 1.3 })
       fx.burst(this.sm.W / 2, this.sm.H / 2, { n: 18, colors: ['#FFD86E', '#FFF3C4'], speed: 150, size: 3 })
       this.snd('power')
@@ -809,6 +822,11 @@ GameScene.prototype.onWin = function (st) {
       extra.push('⟳ 第 ' + this.ngCycle + ' 轮回 ×' + ngMul)
       ngplus.incClear()
       if (ngplus.info().cycleDone) extra.push('🏆 本周目 120 关全部通关！')
+    }
+    // 图鉴收集里程碑（全怪收录 / 全图鉴收录）：一次性发碎片+称号
+    const cxGot = codex.checkMilestones(storage)
+    for (let ci = 0; ci < cxGot.length; ci++) {
+      extra.push('📖 图鉴达成「' + cxGot[ci].title + '」+' + cxGot[ci].shard + ' 碎片')
     }
     storage.addDust(dustEarn)
   } catch (e) {

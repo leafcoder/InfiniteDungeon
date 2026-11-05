@@ -615,9 +615,16 @@ PlayCore.prototype.updateMonsters = function (now) {
     for (let i = 0; i < this.monsters.length; i++) {
       const m = this.monsters[i]
       if (m.isBoss) {
-        if (m.flee && now - (m._lastMove || 0) >= this.fleeStepMs) {
-          m._lastMove = now
-          this.stepFlee(m, grid, px, py)
+        if (m.flee) {
+          // 首次照面收录：宝藏Boss 图鉴（它不追击，只有走近才发 alert）
+          if (!m._alerted && Math.abs(m.x - px) + Math.abs(m.y - py) <= 5) {
+            m._alerted = true
+            this.emit('alert', { x: m.x, y: m.y, kind: 'boss', special: 'flee' })
+          }
+          if (now - (m._lastMove || 0) >= this.fleeStepMs) {
+            m._lastMove = now
+            this.stepFlee(m, grid, px, py)
+          }
         }
         continue
       }
@@ -641,7 +648,7 @@ PlayCore.prototype.updateMonsters = function (now) {
         m.chasing = true
         if (!m._alerted) {
           m._alerted = true
-          this.emit('alert', { x: m.x, y: m.y, kind: this.monsterKind(m) })
+          this.emit('alert', { x: m.x, y: m.y, kind: this.monsterKind(m), special: m.isGatekeeper ? 'gatekeeper' : (m.flee ? 'flee' : null) })
         }
         if (m.behavior >= 2) {
           m.shootCd -= 1
@@ -791,6 +798,11 @@ PlayCore.prototype.stepGatekeeper = function (m, grid, tx, ty) {
   const d2 = (m.x - tx) * (m.x - tx) + (m.y - ty) * (m.y - ty)
   if (d2 <= 25) {
     m.alert = 100
+    // 首次警觉收录：守门怪图鉴（guard→chase 翻转帧）
+    if (!m.chasing && !m._alerted) {
+      m._alerted = true
+      this.emit('alert', { x: m.x, y: m.y, kind: this.monsterKind(m), special: 'gatekeeper' })
+    }
     m.chasing = true
     const step = maze.bfsStepToward(grid, { x: m.x, y: m.y }, { x: tx, y: ty })
     if (step) {
@@ -1065,7 +1077,7 @@ PlayCore.prototype.updateShots = function () {
           this.kills++
           this.items.push({ x: m.x, y: m.y, type: 'gem', taken: false })
           this.itemMap[m.x + ',' + m.y] = this.items[this.items.length - 1]
-          this.emit('kill', { x: m.x, y: m.y, kind: this.monsterKind(m) })
+          this.emit('kill', { x: m.x, y: m.y, kind: this.monsterKind(m), special: m.isGatekeeper ? 'gatekeeper' : (m.flee ? 'flee' : null) })
         }
         break
       }
