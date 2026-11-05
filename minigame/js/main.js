@@ -7,6 +7,7 @@
 const SceneManager = require('./scene/SceneManager')
 const HomeScene = require('./scene/HomeScene')
 const GameScene = require('./scene/GameScene')
+const TowerScene = require('./scene/TowerScene')
 const fx = require('./ui/fx')
 
 let canvas, ctx, dpr, W, H
@@ -38,6 +39,7 @@ function boot() {
   sm.capB = cap.bottom + 6                                     // 右上控件的安全起始 y
   sm.register('home', new HomeScene(sm))
   sm.register('game', new GameScene(sm))
+  sm.register('tower', new TowerScene(sm))
   sm.switch('home')
 
   // 触摸事件 → 当前场景（小游戏坐标即逻辑像素，无需换算）

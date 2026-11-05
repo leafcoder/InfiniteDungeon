@@ -48,7 +48,7 @@ const DOCK = [
   { key: 'daily', icon: '📅', label: '每日' },
   { key: 'weekly', icon: '🗓️', label: '周挑战' },
   { key: 'supply', icon: '🛒', label: '补给' },
-  { key: 'survival', icon: '💀', label: '生存' },
+  { key: 'survival', icon: '🛡', label: '守卫' },
   { key: 'endless', icon: '🗼', label: '无尽' },
   { key: 'task', icon: '📋', label: '任务' }
 ]
@@ -316,37 +316,36 @@ HomeScene.prototype.openEntry = function (key) {
       self.sm.switch('game', { mode: 'endless', floor: 1 })
     }, function () { self.modal = null })
   } else if (key === 'survival') {
-    if (!storage.getFlag('survTut')) {
-      // 首次进入：玩法说明
+    // 槽位内核已升级为「地宫守卫」塔防（P1）：key 保持不变，避免打断 v34 布局断言
+    if (!storage.getFlag('towerTut')) {
       const st = storage.getStats()
       this.modal = new Modal(this.sm, {
-        title: '生存模式 · 玩法',
+        title: '地宫守卫 · 玩法',
         lines: [
-          { t: '🌊 无尽波次生存战：不被怪物抓住，撑到的波数越多越强。', b: true, s: 13 },
+          { t: '🛡 在迷宫墙上建塔，守住地宫核心，撑过越多波越强。', b: true, s: 13 },
           { t: '' },
-          { t: '· 开局 3 秒准备，随后第 1 波来袭', s: 12 },
-          { t: '· 每波比上一波多 1 只追击怪，第 4 波起出现会射击的狙击手', s: 12 },
-          { t: '· 每波限时 20+4n 秒，倒计时归零立即刷新下一波（怪不清空，越积越多）', s: 12 },
-          { t: '· 波与波之间在迷宫刷新一个随机道具，右下角背包 3 格、点按使用', s: 12 },
-          { t: '· 迷雾全程开启，沿途光尘别错过（补给站强化永久生效）', s: 12 },
-          { t: '· 被抓住即结束（可复活一次），成绩 = 撑到的波数', s: 12 },
+          { t: '· 点底部选塔，再点地图任意处会自动吸附到最近的空塔位', s: 12 },
+          { t: '· 底部点「建造」确认；点已有塔可升级或出售', s: 12 },
+          { t: '· 每波间有 8 秒布防，点「提前开波」额外 +10 金币', s: 12 },
+          { t: '· 敌人抵达核心会扣血，核心归零即结束', s: 12 },
+          { t: '· 每波守住后三选一「地宫赐福」，仅本局有效', s: 12 },
           { t: '' },
-          st.bestWave
-            ? { t: '🏆 你的最佳纪录：第 ' + st.bestWave + ' 波', c: '#FFC15E', b: true }
+          (st.bestTowerWave || 0)
+            ? { t: '🏆 你的最佳纪录：守住 ' + st.bestTowerWave + ' 波', c: '#FFC15E', b: true }
             : { t: '尚无纪录，来创造第一个！', c: '#6FE3D2', b: true }
         ],
         buttons: [
-          { label: '开始挑战', primary: true, onTap: function () {
-            storage.setFlag('survTut')
+          { label: '开始守卫', primary: true, onTap: function () {
+            storage.setFlag('towerTut')
             self.modal = null
-            self.sm.switch('game', { mode: 'survival', level: 30 })
+            self.sm.switch('tower')
           } },
           { label: '返回' }
         ],
         onClose: function () { self.modal = null }
       })
     } else {
-      this.sm.switch('game', { mode: 'survival', level: 30 })
+      this.sm.switch('tower')
     }
   } else if (key === 'task') {
     this.modal = require('./TaskPanel').build(this.sm, function () {

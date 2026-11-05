@@ -14,7 +14,7 @@ const MAX_BUFFER = 50
 const TRACK_EVENTS = [
   'level_win', 'level_fail', 'daily_win', 'weekly_win', 'festival_win',
   'endless_depth', 'ach_unlock', 'season_claim', 'checkin',
-  'mutation_win', 'ngplus_enter', 'intro_seen'
+  'mutation_win', 'ngplus_enter', 'intro_seen', 'td_start', 'td_end'
 ]
 
 let transport = null
