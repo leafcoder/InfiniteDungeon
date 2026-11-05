@@ -73,6 +73,8 @@ function checkMilestones(storage) {
     storage.setFlag(ms.flag);
     if (ms.shard) storage.addShard(ms.shard);
     storage.unlockCosmetic('titles', ms.title);
+    // 同步解锁同名成就（maze_ach_v1），使图鉴里程碑在「成就图鉴」面板可见（reward 由 ACHS 决定，与碎片不冲突）
+    if (storage.unlockAch) storage.unlockAch(ms.id);
     got.push(ms);
   }
   return got;

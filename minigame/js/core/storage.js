@@ -680,7 +680,14 @@ const ACHS = [
   { id: 'survivor', name: '终极生存者', desc: '生存模式撑过 10 波', reward: 25 },
   { id: 'hunter', name: '猎手时刻', desc: '抓住携带钥匙的宝藏 Boss', reward: 25 },
   { id: 'fest_clear', name: '节日巡游', desc: '完成一关节日活动关', reward: 10 },
-  { id: 'fest_all', name: '节日制霸', desc: '通关一届节日活动全部 3 关', reward: 30 }
+  { id: 'fest_all', name: '节日制霸', desc: '通关一届节日活动全部 3 关', reward: 30 },
+  // 魔弹击杀成就（累计 bow 击杀，跨模式在 onWin 统一累计）：三档递进
+  { id: 'bow1', name: '魔弹射手', desc: '用魔弹击杀 1 个怪物', reward: 10 },
+  { id: 'bow10', name: '弹无虚发', desc: '累计用魔弹击杀 10 个怪物', reward: 20 },
+  { id: 'bow50', name: '魔弹大师', desc: '累计用魔弹击杀 50 个怪物', reward: 40 },
+  // 图鉴收集里程碑（与 codex.checkMilestones 的碎片+称号同源，仅把「成就」钩子补齐，使其在成就面板可见）
+  { id: 'cx_m', name: '博物学家', desc: '图鉴收录全部怪物', reward: 15 },
+  { id: 'cx_all', name: '地宫学者', desc: '图鉴全部收录', reward: 30 }
 ];
 const ACH_KEY = 'maze_ach_v1';
 function getAch() {
@@ -816,6 +823,28 @@ function recordWin(level, info) {
   try {
     wx.setStorageSync(ACH_KEY, a);
   } catch (e) {}
+  return newAch;
+}
+
+// 魔弹击杀累计 + 成就解锁（跨模式：level/daily/weekly/festival/endless 均在 GameScene.onWin 统一调用）
+// n 为本局 bow 击杀数；累计进 stats.bowKills，按三档（1/10/50）解锁成就
+// 返回本次新解锁成就 [{id,name,reward}]
+function recordBowKills(n) {
+  if (!n || n <= 0) return [];
+  const st = getStats();
+  st.bowKills = (st.bowKills || 0) + n;
+  saveStats(st);
+  const a = getAch();
+  const tiers = [['bow1', 1], ['bow10', 10], ['bow50', 50]];
+  const newAch = [];
+  for (let i = 0; i < tiers.length; i++) {
+    const id = tiers[i][0], need = tiers[i][1];
+    if (st.bowKills >= need && !a[id]) {
+      const reward = unlockAch(id);
+      const def = ACHS.filter(function (x) { return x.id === id; })[0];
+      newAch.push({ id: id, name: def ? def.name : id, reward: reward });
+    }
+  }
   return newAch;
 }
 
@@ -1215,6 +1244,7 @@ module.exports = {
   getDaily: getDaily,
   completeDaily: completeDaily,
   recordWin: recordWin,
+  recordBowKills: recordBowKills,
   getCodex: getCodex,
   getWeeklyDone: getWeeklyDone,
   completeWeekLevel: completeWeekLevel,

@@ -585,11 +585,10 @@ function showSupply(sm, onClose) {
 
 function showAch(sm, onClose) {
   const list = storage.achList()
-  const done = storage.getStats().ach || {}
   const rows = []
   for (let i = 0; i < list.length; i++) {
     const a = list[i]
-    const got = !!done[a.id]
+    const got = a.unlocked
     rows.push({
       ick: got ? 'rank' : 'lock',
       icCol: got ? '#FFC15E' : '#9AA0C8',
@@ -651,7 +650,7 @@ function showAch(sm, onClose) {
   return new Modal(sm, {
     title: '成就图鉴',
     lines: [
-      L('成就 ' + Object.keys(done).length + '/' + list.length + ' · 达成成就永久点亮', { b: true, c: '#FFC15E', s: 13.5 }),
+      L('成就 ' + list.filter(function (a) { return a.unlocked; }).length + '/' + list.length + ' · 达成成就永久点亮', { b: true, c: '#FFC15E', s: 13.5 }),
       L('皮肤收集 ' + storage.getUnlockedSkins().length + '/' + theme.ORDER.length + ' · 光尘解锁更多主题', { c: '#6FE3D2', s: 11.5 })
     ],
     rows: rows,

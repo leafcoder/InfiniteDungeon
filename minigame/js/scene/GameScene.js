@@ -728,6 +728,14 @@ GameScene.prototype.onWin = function (st) {
   const stars = ratio >= 1 ? 3 : ratio >= 0.6 ? 2 : 1
   let dustEarn
   let extra = []
+  // 魔弹击杀成就：累计本局 bow 击杀，跨模式统一解锁（每日/周/节日/无尽塔均计入）
+  try {
+    const bowAch = storage.recordBowKills(this.core.kills)
+    for (let bai = 0; bai < bowAch.length; bai++) {
+      const ba = bowAch[bai]
+      extra.push('🏅 ' + ba.name + (ba.reward > 0 ? ' +' + ba.reward + '✦' : ''))
+    }
+  } catch (e) {}
   // 结算前快照：用于判断「本关是否刚好让某个日常达标」，给达成瞬间一个正反馈
   const briefBefore = task.dailyBrief()
   try {
