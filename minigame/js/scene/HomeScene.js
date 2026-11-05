@@ -16,6 +16,7 @@ const ad = require('../core/ad')
 const endless = require('../core/endless')
 const festival = require('../core/festival')
 const mutation = require('../core/mutation')
+const checkin = require('../core/checkin')
 const task = require('../core/task')
 const Icons = require('../ui/Icons')
 const club = require('../ui/gameclub')
@@ -162,6 +163,12 @@ HomeScene.prototype.enter = function () {
     ? { x: 16 * u, y: this.hero.y + this.hero.h + 8 * u, w: W - 32 * u, h: 36 * u }
     : null
   if (this.mutRect) this.festBottom = this.mutRect.y + this.mutRect.h + 8 * u
+  // 每日签到横幅：与节日/异变共用槽位（节日 > 异变 > 签到），仅未签到时显示，可点
+  this.chk = checkin.info()
+  this.chkRect = (!this.fest && !(this.mut && this.mut.mods.length > 0) && this.chk && !this.chk.signed)
+    ? { x: 16 * u, y: this.hero.y + this.hero.h + 8 * u, w: W - 32 * u, h: 36 * u }
+    : null
+  if (this.chkRect) this.festBottom = this.chkRect.y + this.chkRect.h + 8 * u
   this.heroSc = new ScrollView({ x: this.hero.x, y: this.hero.y, w: this.hero.w, h: this.hero.h, horizontal: true })
   // 分区切换：左右滑动 + 圆点指示器（反馈：两侧箭头与手势重复且挤占空间，已移除）
 
@@ -441,6 +448,76 @@ HomeScene.prototype.drawMutBanner = function (ctx, v) {
   ctx.restore()
 }
 
+// 每日签到横幅：未签到时显示今日可得 + 连续天数，点击打开签到弹窗（节日/异变优先让位）
+HomeScene.prototype.drawChkBanner = function (ctx, v) {
+  if (!this.chkRect || !this.chk || this.chk.signed) return
+  const u = this.u
+  const e = this.ent(2)
+  if (e <= 0) return
+  const r = this.chkRect
+  ctx.save()
+  ctx.globalAlpha = e
+  ctx.translate(0, (1 - e) * 10)
+  const pulse = 0.5 + 0.5 * fx.pulse(1700, 0.6)
+  roundRect(ctx, r.x, r.y, r.w, r.h, 18 * u)
+  const bg = ctx.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h)
+  bg.addColorStop(0, 'rgba(255,180,110,' + (0.18 + 0.05 * pulse) + ')')
+  bg.addColorStop(1, 'rgba(255,212,138,' + (0.10 + 0.04 * pulse) + ')')
+  ctx.fillStyle = bg
+  ctx.fill()
+  ctx.lineWidth = 1
+  ctx.strokeStyle = 'rgba(255,180,110,' + (0.45 + 0.25 * pulse) + ')'
+  ctx.stroke()
+  // 左侧圆徽：四芒星矢量（与异变同款图标，暖金色区分）
+  const cx = r.x + 26 * u
+  const cy = r.y + r.h / 2
+  ctx.beginPath()
+  ctx.arc(cx, cy, 15 * u, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(255,226,184,0.18)'
+  ctx.fill()
+  Icons.drawIcon(ctx, 'spark', cx, cy + 1, 16 * u, '#FFB46E')
+  // 签到主文案 + 连续进度
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#FFE2B8'
+  ctx.font = 'bold ' + Math.round(14 * u) + 'px sans-serif'
+  ctx.fillText('每日签到 · +' + this.chk.todayDust + ' 光尘', r.x + 50 * u, r.y + r.h / 2 - 6 * u)
+  ctx.fillStyle = 'rgba(255,226,184,0.62)'
+  ctx.font = Math.round(9.5 * u) + 'px sans-serif'
+  const nx = this.chk.nextMs
+  ctx.fillText(this.chk.streak > 0
+    ? ('已连签 ' + this.chk.streak + ' 天 · ' + (nx ? nx.label + ' 还差 ' + nx.left + ' 天' : '里程碑全达成'))
+    : (nx ? '连签 ' + nx.day + ' 天得 ' + nx.label : '坚持签到有厚礼'), r.x + 50 * u, r.y + r.h / 2 + 9 * u)
+  // 右侧 CTA
+  ctx.textAlign = 'right'
+  ctx.fillStyle = 'rgba(255,226,184,' + (0.70 + 0.30 * pulse) + ')'
+  ctx.font = 'bold ' + Math.round(12.5 * u) + 'px sans-serif'
+  ctx.fillText('签到 ›', r.x + r.w - 16 * u, r.y + r.h / 2 + 1)
+  ctx.textBaseline = 'alphabetic'
+  ctx.restore()
+}
+
+// 签到横幅热区（上下外扩扩大热区）
+HomeScene.prototype.inChkRect = function (tx, ty) {
+  const r = this.chkRect
+  if (!r || !this.chk || this.chk.signed) return false
+  const pad = 8 * this.u
+  return tx >= r.x && tx <= r.x + r.w && ty >= r.y - pad && ty <= r.y + r.h + pad
+}
+
+// 签到弹窗：关闭/签到后刷新横幅状态与光尘显示
+HomeScene.prototype.openCheckin = function () {
+  const self = this
+  this.modal = Modals.showCheckin(this.sm, function () {
+    self.modal = null
+    self.chk = checkin.info()
+    self.chkRect = (self.chk && !self.chk.signed && !self.fest && !(self.mut && self.mut.mods.length > 0))
+      ? self.chkRect : null
+    self.dustDisp = storage.getDust() // 签到所得直接就位（不重播入场动画）
+    self.dirty = true
+  })
+}
+
 HomeScene.prototype.showToast = function (msg) {
   this.toastMsg = msg
   this.toastUntil = Date.now() + 1600
@@ -540,6 +617,10 @@ HomeScene.prototype.onTouchEnd = function (tx, ty) {
   // 节日限时活动胶囊（N12）
   if (this.touchDown && this.isTap(tx, ty) && this.inFestPill(tx, ty)) {
     this.openFest()
+  }
+  // 每日签到横幅（可点）
+  if (this.touchDown && this.isTap(tx, ty) && this.inChkRect(tx, ty)) {
+    this.openCheckin()
   }
   this.touchDown = null
 }
@@ -725,6 +806,7 @@ HomeScene.prototype.draw = function (ctx) {
   this.drawHero(ctx, v)
   this.drawFestBanner(ctx, v)
   this.drawMutBanner(ctx, v)
+  this.drawChkBanner(ctx, v)
   this.drawDots(ctx, v)
   this.drawGrid(ctx, v)
   this.goBtn.draw(ctx)

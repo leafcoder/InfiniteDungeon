@@ -16,6 +16,7 @@ const ad = require('../core/ad')
 const endless = require('../core/endless')
 const festival = require('../core/festival')
 const task = require('../core/task')
+const checkin = require('../core/checkin')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
 const TaskPanel = require('../scene/TaskPanel')
@@ -32,8 +33,8 @@ function L(t, o) {
 
 /* ---------- 补给站（单页内联购买，行卡直接点按） ---------- */
 
-const SKIN_ICON = { classic: 'castle', glow: 'leaf', festival: 'lantern', cosmos: 'spark', abyss: 'wave', sakura: 'flower' }
-const SKIN_COL = { classic: '#FFC15E', glow: '#6FE3D2', festival: '#FF7A92', cosmos: '#9B8CFF', abyss: '#40E0FF', sakura: '#FF9ECB' }
+const SKIN_ICON = { classic: 'castle', glow: 'leaf', festival: 'lantern', cosmos: 'spark', abyss: 'wave', sakura: 'flower', dawn: 'spark' }
+const SKIN_COL = { classic: '#FFC15E', glow: '#6FE3D2', festival: '#FF7A92', cosmos: '#9B8CFF', abyss: '#40E0FF', sakura: '#FF9ECB', dawn: '#FFB46E' }
 const UPG_COL = { cloak: '#9B8CFF', freeze: '#6FE3D2', dash: '#FF9F6E' }
 
 // 皮肤行卡（补给站与独立皮肤弹窗共用，避免重复逻辑）
@@ -53,6 +54,7 @@ function buildSkinRows(sm, refresh) {
     let sub, tag, tagColor
     if (using) { sub = t.desc || '已装备'; tag = '使用中'; tagColor = '#FFC15E' }
     else if (has) { sub = t.desc || '已拥有'; tag = '点按切换'; tagColor = '#6FE3D2' }
+    else if (t.exclusive) { sub = t.exclusiveHint || '限定获取'; tag = '限定'; tagColor = '#FF9E4A' }
     else if (shardCost > 0 && myShards >= shardCost) { sub = '碎片 ' + myShards + '/' + shardCost + ' · 可兑换'; tag = '碎片兑换'; tagColor = '#6FE3D2' }
     else if (shardCost > 0) { sub = '碎片 ' + myShards + '/' + shardCost + ' · 每日全勤+3'; tag = t.price + '✦'; tagColor = '#FFD86E' }
     else { sub = t.desc || '光尘解锁 · 或看广告免费解锁'; tag = t.price + '✦'; tagColor = '#FFD86E' }
@@ -67,6 +69,11 @@ function buildSkinRows(sm, refresh) {
       onTap: function (m) {
         if (using) return
         if (!has) {
+          // 限定皮肤（签到等来源专属）：不走光尘/碎片/广告任何获取路径
+          if (t.exclusive) {
+            sm.toast(t.exclusiveHint || '该皮肤为限定获取')
+            return
+          }
           // 碎片优先：持有足够则碎片兑换（任务货币闭环）
           if (shardCost > 0 && storage.getShards() >= shardCost) {
             storage.spendShard(shardCost)
@@ -787,6 +794,60 @@ function showEndless(sm, startFn, onClose) {
   })
 }
 
+/* ---------- 每日签到（连续签到里程碑） ---------- */
+
+function showCheckin(sm, onClose) {
+  const inf = checkin.info()
+  // 里程碑行：已领 → check 图标 + 绿 tag；未达成 → lock + 灰 tag + 还差 N 天
+  const rows = inf.ms.map(function (m) {
+    const isNext = inf.nextMs && inf.nextMs.day === m.day
+    return {
+      ick: m.got ? 'check' : (isNext ? 'spark' : 'lock'),
+      icCol: m.got ? '#6FE3D2' : (isNext ? '#FFB46E' : '#9AA0C8'),
+      title: '连续 ' + m.day + ' 天 · ' + m.label,
+      sub: m.got ? '已领取' : (isNext ? '再签 ' + m.left + ' 天即可领取' : '尚未达成'),
+      tag: m.got ? '已领取' : (isNext ? '进行中' : m.day + ' 天'),
+      tagColor: m.got ? '#6FE3D2' : (isNext ? '#FFB46E' : '#9AA0C8'),
+      dim: !isNext && !m.got,
+      onTap: null
+    }
+  })
+  const btns = []
+  if (!inf.signed) {
+    btns.push({
+      label: '立即签到 +' + inf.todayDust + ' 光尘', primary: true,
+      onTap: function () {
+        const r = checkin.sign()
+        if (!r.ok) { sm.toast('今日已签到'); sm.sceneModal(showCheckin(sm, onClose)); return }
+        let msg = '签到成功 · +' + inf.todayDust + ' 光尘 · 连续 ' + r.streak + ' 天'
+        if (r.msGot.length) {
+          const skinGot = r.msGot.some(function (g) { return g.kind === 'skin' })
+          msg += skinGot ? ' · 解锁皮肤「晨曦」！' : ' · 里程碑达成！'
+        }
+        sm.toast(msg)
+        sm.sceneModal(showCheckin(sm, onClose))
+      }
+    })
+  } else {
+    btns.push({ label: '今日已签到 · 明天再来', primary: false, onTap: null })
+  }
+  btns.push({ label: '关闭' })
+  return new Modal(sm, {
+    title: '每日签到',
+    lines: [
+      L('已连续签到 ' + inf.streak + ' 天 · 累计 ' + inf.total + ' 天', { b: true, c: '#FFB46E' }),
+      L('每日签到送光尘（连续越久送越多），断签不扣已得奖励、连续从 1 重新计。', { s: 12 }),
+      L(''),
+      inf.nextMs
+        ? L('下一个里程碑：' + inf.nextMs.label + '（还差 ' + inf.nextMs.left + ' 天）', { s: 12, c: '#6FE3D2' })
+        : L('全部里程碑已达成，感谢坚守地宫！', { s: 12, c: '#6FE3D2' })
+    ],
+    rows: rows,
+    buttons: btns,
+    onClose: onClose
+  })
+}
+
 /* ---------- 每日挑战 ---------- */
 
 function showDaily(sm, startFn, onClose) {
@@ -1123,6 +1184,7 @@ module.exports = {
   showAch: showAch,
   showRank: showRank,
   showDaily: showDaily,
+  showCheckin: showCheckin,
   showWeekly: showWeekly,
   showCode: showCode,
   showJournal: showJournal,

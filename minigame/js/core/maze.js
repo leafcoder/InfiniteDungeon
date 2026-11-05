@@ -817,9 +817,11 @@ function placeItems(level, maze, monsters, seed) {
   for (let k = 0; k < gemCount && idx < open.length; k++, idx++) {
     items.push({ x: open[idx].x, y: open[idx].y, type: 'gem', taken: false });
   }
-  // 道具池：L31+（怪物登场）加入诱饵；迷雾关（L41+）加入磁铁 / 照明弹
+  // 道具池：L31+（怪物登场）加入诱饵；迷雾关（L41+）加入磁铁 / 照明弹；
+  // L61+ 加入魔弹（英雄远程反制：击杀普通怪 / 眩晕 Boss）
   const base = ['cloak', 'freeze', 'dash', 'shield'];
   if (level >= 31) base.push('decoy');
+  if (level >= 61) base.push('bow');
   const types = level >= 41 ? base.concat(['magnet', 'flare']) : base;
   const powerCount = level < 6 ? 0 : (level < 25 ? 1 : 2);
   for (let k = 0; k < powerCount && idx < open.length; k++, idx++) {

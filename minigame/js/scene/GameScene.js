@@ -525,6 +525,28 @@ GameScene.prototype.handleEvent = function (ev) {
       fx.shake(1.6, 0.1)
       this.snd('boss')
       break
+    case 'shootP':
+      // 英雄魔弹出膛（轻反馈，不打断节奏）
+      fx.shake(0.8, 0.06)
+      this.snd('power')
+      break
+    case 'kill': {
+      // 魔弹击杀普通怪：原地爆光尘粒子（掉落的 gem 由拾取事件再触发一次反馈）
+      const kL = computeLayout(this.core, this.view)
+      const kx = kL.ox + (d.x + 0.5) * kL.cs
+      const ky = kL.oy + (d.y + 0.5) * kL.cs
+      fx.burst(kx, ky, { n: 16, colors: ['#C79BFF', '#FFD86E', '#FFFFFF'], speed: 150, size: 3, life: 0.55, ring: true })
+      fx.text(kx, ky - 12, '击杀！', '#C79BFF', { size: 14 * this.u, life: 1.0 })
+      fx.shake(2.2, 0.14)
+      this.snd('power')
+      try { storage.encounterCodex('m_kill') } catch (e) {}
+      break
+    }
+    case 'bossStun':
+      fx.shake(3.5, 0.2)
+      this.snd('boss')
+      this.setHint('魔弹命中！迷宫之主眩晕 2.5 秒')
+      break
     case 'secret':
       storage.addDust(d.dust || 5)
       fx.text(this.sm.W / 2, this.view.by + this.view.bh * 0.3, '✦ 隐藏密室 +' + (d.dust || 5), '#FFD86E', { size: 15 * this.u, life: 1.3 })

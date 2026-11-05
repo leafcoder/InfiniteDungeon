@@ -82,6 +82,7 @@ const COSMETIC_META = {
   title: {
     '地宫常驻': { desc: '每周任务全勤限定称号', color: '#FFC15E' },
     '地宫守望': { desc: '连续 14 天全勤限定称号', color: '#6FE3D2' },
+    '晨昏与共': { desc: '连续签到 14 天限定称号', color: '#FFB46E' },
     '深渊纪年': { desc: '赛季征程 Lv.25 限定称号', color: '#E36BFF' }
   }
 }
@@ -293,6 +294,7 @@ function applyReward(rw) {
   if (rw.shard) { const before = storage.addShard(rw.shard); got.push({ kind: 'shard', n: rw.shard, total: before }) }
   if (rw.frame) { storage.unlockCosmetic('frames', rw.frame); got.push({ kind: 'frame', n: rw.frame }) }
   if (rw.title) { storage.unlockCosmetic('titles', rw.title); got.push({ kind: 'title', n: rw.title }) }
+  if (rw.skin) { storage.unlockSkin(rw.skin); got.push({ kind: 'skin', n: rw.skin }) }
   return got
 }
 

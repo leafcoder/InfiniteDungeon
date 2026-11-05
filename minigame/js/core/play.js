@@ -15,7 +15,7 @@ const maze = require('./maze')
 const DIRV = { U: [0, -1], D: [0, 1], L: [-1, 0], R: [1, 0] }
 const OPPD = { U: 'D', D: 'U', L: 'R', R: 'L' }
 const BAG_MAX = 3
-const FX_TYPES = ['cloak', 'freeze', 'dash', 'shield', 'magnet', 'flare', 'decoy', 'hourglass', 'scroll']
+const FX_TYPES = ['cloak', 'freeze', 'dash', 'shield', 'magnet', 'flare', 'decoy', 'hourglass', 'scroll', 'bow']
 
 function PlayCore(level, opts) {
   opts = opts || {}
@@ -195,6 +195,8 @@ PlayCore.prototype.initLevel = function () {
 
   // 运行时状态
   this.bullets = []
+  this.shots = []       // 玩家魔弹（与怪物子弹分离：互不伤害，命中怪物）
+  this.kills = 0        // 本局击杀数（魔弹战果，结算可展示）
   this.dead = false
   this.won = false
   this.stepping = false
@@ -404,6 +406,7 @@ PlayCore.prototype.tick = function (now) {
   // 怪物与子弹
   this.updateMonsters(now)
   this.updateBullets()
+  this.updateShots()
 
   // 碰撞
   this.checkCollision(now)
@@ -700,7 +703,7 @@ PlayCore.prototype.updateMonsters = function (now) {
     this.lastBossMove = now
     for (let i = 0; i < this.monsters.length; i++) {
       const b = this.monsters[i]
-      if (b.isBoss && !b.flee) this.stepBoss(b, grid, px, py, cloaked)
+      if (b.isBoss && !b.flee && !(b.stunUntil && this.now < b.stunUntil)) this.stepBoss(b, grid, px, py, cloaked)
     }
   }
 }
@@ -713,6 +716,8 @@ PlayCore.prototype.findBoss = function () {
 }
 
 PlayCore.prototype.stepBoss = function (b, grid, px, py, cloaked) {
+  // 魔弹眩晕：停摆期内不追击不抬头（chasing/alert 已在命中时复位）
+  if (b.stunUntil && this.now < b.stunUntil) return
   b.alert = 100
   b.chasing = true
   if (cloaked) {
@@ -981,6 +986,7 @@ PlayCore.prototype.revive = function () {
     if (Math.abs(mm.x - to.x) + Math.abs(mm.y - to.y) <= 3) this.monsters.splice(i, 1)
   }
   this.bullets = []
+  this.shots = []
   this.invulnUntil = this.now + 3000
   this.stepping = false
   this.waiting = true
@@ -994,6 +1000,77 @@ PlayCore.prototype.spawnBullet = function (m, tx, ty) {
   const len = Math.sqrt(dx * dx + dy * dy) || 1
   this.bullets.push({ x: m.x + (dx / len) * 0.6, y: m.y + (dy / len) * 0.6, dx: dx / len, dy: dy / len })
   this.emit('shoot', { x: m.x, y: m.y })
+}
+
+/* ============ 英雄魔弹（bow）============ */
+
+// 发射魔弹：视线内最近怪物为靶（普通怪击杀并掉落光尘，Boss 眩晕 2.5s，逃跑 Boss 免疫）
+// 无目标不消耗弹药；每次使用消耗 1 发（一根魔弹杖 3 发）
+PlayCore.prototype.fireBow = function (idx, slot) {
+  const grid = this.maze.grid
+  const px = this.state.x
+  const py = this.state.y
+  let target = null
+  let bestD = 1e9
+  for (let i = 0; i < this.monsters.length; i++) {
+    const m = this.monsters[i]
+    if (m.flee) continue // 逃跑 Boss 是抓捕目标，不射击
+    if (!this.hasLOS(m.x, m.y, px, py, grid)) continue
+    const dd = Math.abs(m.x - px) + Math.abs(m.y - py)
+    if (dd < bestD) { bestD = dd; target = { m: m, i: i } }
+  }
+  if (!target) {
+    this.emit('hint', '视野内没有目标 · 魔弹未发射')
+    return
+  }
+  const m = target.m
+  const dx = m.x - px
+  const dy = m.y - py
+  const len = Math.sqrt(dx * dx + dy * dy) || 1
+  this.shots.push({ x: px + (dx / len) * 0.6, y: py + (dy / len) * 0.6, dx: dx / len, dy: dy / len })
+  this.emit('shootP', { x: px, y: py })
+  slot.count--
+  if (slot.count <= 0) this.bag.splice(idx, 1)
+  this.bagSel = Math.min(this.bagSel, Math.max(0, this.bag.length - 1))
+}
+
+PlayCore.prototype.updateShots = function () {
+  const grid = this.maze.grid
+  for (let i = this.shots.length - 1; i >= 0; i--) {
+    const b = this.shots[i]
+    b.x += b.dx * this.bulletSpeed * 1.15
+    b.y += b.dy * this.bulletSpeed * 1.15
+    const cx = Math.round(b.x)
+    const cy = Math.round(b.y)
+    // 撞墙消失
+    if (cx < 0 || cy < 0 || cy >= grid.length || cx >= grid[0].length || grid[cy][cx] !== 1) {
+      this.shots.splice(i, 1)
+      continue
+    }
+    // 命中判定：与怪物格中心距离 < 0.5
+    for (let j = this.monsters.length - 1; j >= 0; j--) {
+      const m = this.monsters[j]
+      if (Math.abs(m.x - b.x) < 0.5 && Math.abs(m.y - b.y) < 0.5) {
+        this.shots.splice(i, 1)
+        if (m.isBoss && !m.flee) {
+          // Boss 免疫击杀：眩晕 2.5 秒并复位追击态（打断一轮包围）
+          m.stunUntil = this.now + 2500
+          m.chasing = false
+          m.alert = 0
+          m.lastSeen = null
+          this.emit('bossStun', { x: m.x, y: m.y })
+        } else if (!m.flee) {
+          // 普通怪/守门怪/射手怪：击杀，原地掉落 1 光尘（收集有风险，风险回报自选）
+          this.monsters.splice(j, 1)
+          this.kills++
+          this.items.push({ x: m.x, y: m.y, type: 'gem', taken: false })
+          this.itemMap[m.x + ',' + m.y] = this.items[this.items.length - 1]
+          this.emit('kill', { x: m.x, y: m.y, kind: this.monsterKind(m) })
+        }
+        break
+      }
+    }
+  }
 }
 
 PlayCore.prototype.updateBullets = function () {
@@ -1033,6 +1110,8 @@ PlayCore.prototype.checkPickup = function () {
       return
     }
     const slot = this.addToBag(it.type)
+    // 魔弹杖：拾取即装填 3 发（同类叠加时不覆盖剩余弹药）
+    if (slot && it.type === 'bow' && slot.count < 3) slot.count = 3
     this.emit('pickup', { type: it.type, x: it.x, y: it.y, count: slot ? slot.count : 1 })
   }
 }
@@ -1069,6 +1148,10 @@ PlayCore.prototype.useItem = function (idx) {
   const t = slot.type
   if (t === 'hourglass') {
     this.emit('hint', '时光沙漏会在被抓的瞬间自动生效')
+    return
+  }
+  if (t === 'bow') {
+    this.fireBow(idx, slot)
     return
   }
   if (t === 'scroll') {
@@ -1255,7 +1338,8 @@ PlayCore.prototype.stats = function () {
     steps: this.steps,
     swipe: this.swipeCount,
     gems: this.collected,
-    gemTotal: this.gemTotal
+    gemTotal: this.gemTotal,
+    kills: this.kills
   }
 }
 

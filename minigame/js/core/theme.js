@@ -175,10 +175,41 @@ const THEMES = {
       '--cta-2': '#FF9ECB'
     },
     zones: ['#FF9ECB', '#FFC2E0', '#FFD0E4', '#FFB4D2', '#FFF0F6', '#E58FC8']
+  },
+  dawn: {
+    label: '晨曦',
+    desc: '破晓金粉 · 签到限定',
+    price: 0,
+    exclusive: true,
+    exclusiveHint: '连续签到 7 天限定获取',
+    vars: {
+      '--bg-1': '#3A1E4D',
+      '--bg-2': '#7A2E5E',
+      '--bg-3': '#B5604A',
+      '--glass': 'rgba(255,214,170,0.10)',
+      '--glass-strong': 'rgba(255,214,170,0.16)',
+      '--glass-line': 'rgba(255,214,170,0.20)',
+      '--panel': '#4A2440',
+      '--panel-2': '#331830',
+      '--panel-line': 'rgba(255,214,170,0.28)',
+      '--text': '#FFF2E2',
+      '--text-sub': 'rgba(255,232,208,0.80)',
+      '--accent': '#FFB46E',
+      '--accent-2': '#FF8FA3',
+      '--warn': '#FFD98A',
+      '--danger': '#FF6B7D',
+      '--board': '#2C1430',
+      '--dock': 'rgba(40,16,42,0.5)',
+      '--pill': 'rgba(255,214,170,0.12)',
+      '--pill-line': 'rgba(255,214,170,0.24)',
+      '--cta-1': '#FFE2B8',
+      '--cta-2': '#FF9E6E'
+    },
+    zones: ['#FFB46E', '#FF8FA3', '#FFD98A', '#E58FC8', '#FFE2B8', '#C97DB0']
   }
 };
 
-const ORDER = ['classic', 'glow', 'festival', 'cosmos', 'abyss', 'sakura'];
+const ORDER = ['classic', 'glow', 'festival', 'cosmos', 'abyss', 'sakura', 'dawn'];
 
 // 皮肤碎片兑换价（任务每日全勤 +3 碎片；classic 默认拥有不在此列）
 // 目的：让任务产出的碎片成为皮肤的有效兑换货币，闭合「收集→使用」循环

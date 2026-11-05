@@ -40,10 +40,19 @@ console.log('--- 反馈1：活动横幅位置 ---');
   T('网格在圆点行下方不重叠', hs.gz.y >= hs.dotsRect().y + 8);
   T('横幅命中区域生效', hs.inFestPill(hs.festRect.x + 20, hs.festRect.y + 10));
   // 空档期：布局回退（圆点/网格位置与无活动一致）；real 已在块首保存
+  // 异变横幅（v22）与签到横幅（v23）共用该槽位：注入宁静日 + 模拟已签到，保证「真正空档」
   festival.getActive = () => null;
+  const mutation = require(path.join(ROOT, 'core/mutation.js'));
+  const checkin = require(path.join(ROOT, 'core/checkin.js'));
+  const mutReal = mutation.today;
+  mutation.today = () => ({ key: 'calm', name: '宁静日', desc: '', color: '#888888', mods: [] });
+  const chkReal = checkin.info;
+  checkin.info = () => ({ signed: true, streak: 0, total: 0, todayDust: 20, nextMs: null, ms: [], allDone: false });
   const hs2 = new HomeScene(makeSM());
   hs2.enter();
   festival.getActive = real;
+  mutation.today = mutReal;
+  checkin.info = chkReal;
   T('空档期圆点行回到 Hero 卡下方', Math.abs(hs2.dotsRect().y - (hs2.hero.y + hs2.hero.h + 10 * hs2.u)) < 0.01);
   T('空档期网格 y 回到原位', Math.abs(hs2.gz.y - (hs2.hero.y + hs2.hero.h + 28 * hs2.u)) < 0.01);
 }
