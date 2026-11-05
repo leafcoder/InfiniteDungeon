@@ -180,6 +180,11 @@ const THEMES = {
 
 const ORDER = ['classic', 'glow', 'festival', 'cosmos', 'abyss', 'sakura'];
 
+// 皮肤碎片兑换价（任务每日全勤 +3 碎片；classic 默认拥有不在此列）
+// 目的：让任务产出的碎片成为皮肤的有效兑换货币，闭合「收集→使用」循环
+const SHARD_COST = { glow: 20, festival: 30, abyss: 40, cosmos: 50, sakura: 60 };
+function getShardCost(name) { return SHARD_COST[name] || 0; }
+
 function getTheme(name) {
   return THEMES[name] || THEMES.classic;
 }
@@ -205,6 +210,7 @@ function nextTheme(name) {
 module.exports = {
   THEMES: THEMES,
   ORDER: ORDER,
+  getShardCost: getShardCost,
   getTheme: getTheme,
   themeStyle: themeStyle,
   zoneColors: zoneColors,

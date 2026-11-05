@@ -99,7 +99,10 @@ function addProgress(arr, id, delta) {
   const t = arr.filter(function (x) { return x.id === id })[0]
   if (!t || t.claimed) return
   const def = defOf(id)
+  const before = t.progress
   t.progress = Math.min(def.target, t.progress + delta)
+  // 埋点：任务进度首次达到目标（完成事件），只计一次跨越
+  if (before < def.target && t.progress >= def.target) storage.incTaskTrack('complete')
 }
 function onDust(n) {
   if (!n) return
@@ -177,6 +180,7 @@ function claim(id) {
   if (t.progress < def.target) return { ok: false, reason: 'undone' }
   t.claimed = true
   save(s)
+  storage.incTaskTrack('claim')
   const got = applyReward(def.reward)
   // 全勤判定（领取后）
   const st = getState()
@@ -190,10 +194,14 @@ function claim(id) {
   return { ok: true, got: got, fullBonus: fullBonus }
 }
 
+// 埋点统一入口（曝光 / 点击 由面板调用；完成 / 领取 由任务内自动触发）
+// 接后端上报时，在 storage.incTaskTrack 内部转发即可，业务侧无需改动
+function track(ev) { return storage.incTaskTrack(ev) }
+
 module.exports = {
   TASKS: TASKS, FULL_DAILY: FULL_DAILY, FULL_WEEKLY: FULL_WEEKLY, COSMETIC_META: COSMETIC_META,
   weekKey: weekKey, ensure: ensure,
   onDust: onDust, onClear: onClear, onGameClubTap: onGameClubTap, onEndlessDepth: onEndlessDepth,
-  getState: getState, hasClaimable: hasClaimable, claim: claim,
+  getState: getState, hasClaimable: hasClaimable, claim: claim, track: track,
   cosmeticMeta: cosmeticMeta
 }

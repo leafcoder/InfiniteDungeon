@@ -490,7 +490,7 @@ function resetProgress() {
     'maze_stats_v1', 'maze_ach_v1', 'maze_codex_v1', 'maze_codehist_v1',
     'maze_codebest_v1', 'maze_combo_v1', 'maze_ghost_v1', 'maze_flags_v1',
     'maze_trial_v1', 'maze_skills_v1',
-    'maze_task_v1', 'maze_coupon_v1', 'maze_shard_v1', 'maze_cosmetics_v1'
+    'maze_task_v1', 'maze_coupon_v1', 'maze_shard_v1', 'maze_cosmetics_v1', 'maze_task_track_v1'
   ];
   for (let i = 0; i < keys.length; i++) {
     try { wx.removeStorageSync(keys[i]) } catch (e) {}
@@ -545,6 +545,14 @@ function addShard(n) {
   try { wx.setStorageSync(SHARD_KEY, v) } catch (e) {}
   return v
 }
+// 碎片兑换皮肤：足额扣减并解锁；不足返回 false（不扣减）
+function spendShard(n) {
+  const v = getShards()
+  if (v < n || n <= 0) return false
+  const nv = v - n
+  try { wx.setStorageSync(SHARD_KEY, nv) } catch (e) {}
+  return nv
+}
 // 外观收藏：头像框 / 称号（仅展示，不附数值）
 function getCosmetics() {
   try {
@@ -582,6 +590,28 @@ function setActiveTitle(id) {
   c.activeTitle = id || null
   try { wx.setStorageSync(COSM_KEY, c) } catch (e) {}
   return true
+}
+
+/* ============ 任务埋点（本地计数，供接后端上报） ============ */
+// 仅记录行为计数，不附任何数值/隐私；接后端时在 incTaskTrack 内转发即可
+const TRACK_KEY = 'maze_task_track_v1'
+const TRACK_EVENTS = ['expose', 'click', 'complete', 'claim']
+function getTaskTrack() {
+  let t = null
+  try { t = wx.getStorageSync(TRACK_KEY) } catch (e) {}
+  if (!t || typeof t !== 'object') t = {}
+  const out = {}
+  for (let i = 0; i < TRACK_EVENTS.length; i++) out[TRACK_EVENTS[i]] = t[TRACK_EVENTS[i]] || 0
+  return out
+}
+function incTaskTrack(ev) {
+  if (TRACK_EVENTS.indexOf(ev) === -1) return null
+  let t = null
+  try { t = wx.getStorageSync(TRACK_KEY) } catch (e) {}
+  if (!t || typeof t !== 'object') t = {}
+  t[ev] = (t[ev] || 0) + 1
+  try { wx.setStorageSync(TRACK_KEY, t) } catch (e) {}
+  return t[ev]
 }
 
 /* ============ 设置（P4 无障碍 / 音效） ============ */
@@ -1154,11 +1184,14 @@ module.exports = {
   spendCoupon: spendCoupon,
   getShards: getShards,
   addShard: addShard,
+  spendShard: spendShard,
   getCosmetics: getCosmetics,
   unlockCosmetic: unlockCosmetic,
   getActiveCosmetic: getActiveCosmetic,
   setActiveFrame: setActiveFrame,
   setActiveTitle: setActiveTitle,
+  getTaskTrack: getTaskTrack,
+  incTaskTrack: incTaskTrack,
   getStats: getStats,
   saveStats: saveStats,
   achList: achList,

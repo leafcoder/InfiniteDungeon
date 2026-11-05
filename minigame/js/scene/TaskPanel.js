@@ -23,7 +23,8 @@ function iconFor(cat) {
   return 'tower'
 }
 
-function build(sm, onClose) {
+function build(sm, onClose, isRefresh) {
+  if (!isRefresh) task.track('expose') // 面板首次打开记曝光；领取后重建为刷新不重复记
   const st = task.getState()
   const rows = []
 
@@ -36,6 +37,7 @@ function build(sm, onClose) {
     } else if (t.canClaim) {
       tag = '领取'; tagColor = '#FFC15E'
       onTap = function (m) {
+        task.track('click')
         const r = task.claim(t.id)
         if (!r.ok) return
         const msgs = []
@@ -43,7 +45,7 @@ function build(sm, onClose) {
         r.fullBonus.forEach(function (g) { msgs.push('全勤+' + rewardText(g)) })
         if (msgs.length) sm.toast('领取：' + msgs.join('，'))
         if (m && m.close) m.close()
-        sm.sceneModal(build(sm, onClose))
+        sm.sceneModal(build(sm, onClose, true))
       }
     } else {
       tag = '进行中'; tagColor = '#9AA0C8'

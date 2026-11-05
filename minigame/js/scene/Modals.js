@@ -47,17 +47,34 @@ function buildSkinRows(sm, refresh) {
     const t = theme.getTheme(k)
     const has = unlocked.indexOf(k) !== -1
     const using = cur === k
+    const shardCost = theme.getShardCost(k)
+    const myShards = storage.getShards()
+    let sub, tag, tagColor
+    if (using) { sub = t.desc || '已装备'; tag = '使用中'; tagColor = '#FFC15E' }
+    else if (has) { sub = t.desc || '已拥有'; tag = '点按切换'; tagColor = '#6FE3D2' }
+    else if (shardCost > 0 && myShards >= shardCost) { sub = '碎片 ' + myShards + '/' + shardCost + ' · 可兑换'; tag = '碎片兑换'; tagColor = '#6FE3D2' }
+    else if (shardCost > 0) { sub = '碎片 ' + myShards + '/' + shardCost + ' · 每日全勤+3'; tag = t.price + '✦'; tagColor = '#FFD86E' }
+    else { sub = t.desc || '光尘解锁 · 或看广告免费解锁'; tag = t.price + '✦'; tagColor = '#FFD86E' }
     rows.push({
       ick: SKIN_ICON[k] || 'spark',
       icCol: SKIN_COL[k] || '#9B8CFF',
       title: t.label,
-      sub: t.desc || (has ? '已拥有' : '光尘解锁 · 或看广告免费解锁'),
-      tag: using ? '使用中' : has ? '点按切换' : t.price + '✦',
-      tagColor: using ? '#FFC15E' : has ? '#6FE3D2' : '#FFD86E',
+      sub: sub,
+      tag: tag,
+      tagColor: tagColor,
       dim: using,
       onTap: function (m) {
         if (using) return
         if (!has) {
+          // 碎片优先：持有足够则碎片兑换（任务货币闭环）
+          if (shardCost > 0 && storage.getShards() >= shardCost) {
+            storage.spendShard(shardCost)
+            storage.unlockSkin(k)
+            storage.setTheme(k)
+            sm.toast('碎片兑换：' + t.label)
+            refresh(m)
+            return
+          }
           // 光尘足额：直接解锁并穿上
           if (storage.spendDust(t.price)) {
             storage.unlockSkin(k)
@@ -274,7 +291,7 @@ function showSkin(sm, onClose) {
     return {
       title: '外观',
       lines: [
-        L('✦ 光尘 ' + storage.getDust() + ' · 轻点即可切换或解锁', { c: '#FFC15E', b: true, s: 13 }),
+        L('✦ 光尘 ' + storage.getDust() + ' · 碎片 ' + storage.getShards() + ' · 轻点即可切换或兑换', { c: '#FFC15E', b: true, s: 13 }),
         L('皮肤 ' + storage.getUnlockedSkins().length + '/' + theme.ORDER.length + ' · 英雄 ' + storage.getHeroCollected() + '/' + storage.HEROES.length + ' · 外观 ' + (cos.frames.length + cos.titles.length), { c: '#6FE3D2', s: 11.5 })
       ],
       rows: rows,
