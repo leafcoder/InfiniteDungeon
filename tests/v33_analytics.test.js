@@ -135,18 +135,18 @@ console.log('--- 4. 与既有本机任务漏斗并存（互不干扰） ---');
   T('trackSummary 仍可用', typeof task.trackSummary().clickRate === 'number');
 }
 
-console.log('--- 5. 设置页展示埋点上报状态（零新增按钮） ---');
+console.log('--- 5. 设置页不再暴露开发向埋点状态（功能清理） ---');
 {
   analytics.reset();
   analytics.track('level_win', { level: 1 });
   try {
     const m = Modals.showSettings(makeSM(), function () {});
     const row = (m.rows || []).filter(r => (r.title || '').indexOf('埋点上报') >= 0)[0];
-    T('设置页出现埋点上报状态行', !!row);
-    if (row) T('状态行标注「接口留桩」', (row.tag || '').indexOf('留桩') >= 0);
+    T('设置页不再显示埋点上报状态行', !row);
+    T('埋点数据层仍在采集（展示层下线不影响功能）', analytics.summary().buffered > 0);
   } catch (e) {
     console.log('  ⚠ showSettings 跳过：' + e.message);
-    T('设置页状态行', false);
+    T('设置页状态行检查', false);
   }
 }
 

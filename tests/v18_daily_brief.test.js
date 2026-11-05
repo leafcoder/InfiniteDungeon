@@ -68,7 +68,7 @@ function makeSM() {
   hs.enter();
   T('enter 后 taskBrief 存在', !!hs.taskBrief && typeof hs.taskBrief === 'object');
   T('缓存值与 dailyBrief 一致', hs.taskBrief.total === 3 && hs.taskBrief.full === task.dailyBrief().full);
-  T('dock 仍为 7 项且含任务', hs.dock.length === 7 && hs.dock[6].key === 'task');
+  T('dock 收敛为 6 项且含任务（排行已下线）', hs.dock.length === 6 && hs.dock[5].key === 'task');
 
   console.log('--- 6. 跨天重置 → 摘要归零 ---');
   const s = mem['maze_task_v1'];

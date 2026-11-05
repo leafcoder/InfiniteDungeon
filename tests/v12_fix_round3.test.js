@@ -111,15 +111,14 @@ console.log('--- 反馈4：分区箭头移除 ---');
   T('chevL/chevR 已移除', hs.chevL === undefined && hs.chevR === undefined);
 }
 
-console.log('--- 反馈5：首页分享入口 ---');
+console.log('--- 反馈5：分享入口与排行榜已下线（功能清理）---');
 {
   const hs = new HomeScene(makeSM2());
   hs.enter();
+  const before = wxCalls.share.length;
   hs.openEntry('share');
-  T('分享按钮触发 wx.shareAppMessage', wxCalls.share.length === 1 && /无尽地宫/.test(wxCalls.share[0].title));
-  const sm = makeSM2();
-  const m = Modals.showRank(sm, () => {});
-  T('排行榜弹窗可构建（含分享时代码无回归）', !!m);
+  T('分享入口移除后不再触发 wx.shareAppMessage', wxCalls.share.length === before);
+  T('排行榜面板已从导出移除', typeof Modals.showRank === 'undefined');
 }
 
 console.log('--- 反馈6：口令复制/粘贴反馈 ---');
@@ -158,7 +157,7 @@ console.log('--- 反馈7：顶栏图标钮与光尘胶囊同线 ---');
   const b = hs.iconBtns[0];
   T('图标钮 y 与胶囊 y 相同（同一水平线）', b && b.y === hs.pillRect.y);
   T('图标钮高度与胶囊一致（视觉对齐）', b && b.h === hs.pillRect.h);
-  T('顶栏含分享钮共 5 枚', hs.iconBtns.length === 5);
+  T('顶栏收敛为 3 图标钮 + 1 今日徽章共 4 枚', hs.iconBtns.length === 4 && !!hs.todayBtn);
 }
 
 console.log('--- 反馈8：南瓜矢量图标 ---');

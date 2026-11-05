@@ -64,25 +64,18 @@ console.log('--- 2. Modals.showSeason 面板生成 + 领取闭环 ---');
   }
 }
 
-console.log('--- 3. HomeScene 赛季横幅锚点 + 命中 + 入口（尽力，环境缺 stub 则跳过） ---');
+console.log('--- 3. HomeScene 今日徽章 + 常驻赛季横幅下线（尽力，环境缺 stub 则跳过） ---');
 try {
   const sm = fakeSM();
   const hs = new HomeScene(sm);
   hs.enter();
-  const hero = hs.hero, sr = hs.seasonRect;
-  T('seasonRect 已创建', !!sr);
-  if (sr) {
-    T('赛季横幅位于 Hero 卡下方', sr.y > hero.y + hero.h);
-    T('festBottom 在赛季横幅下沿之下（不重叠）', hs.festBottom >= sr.y + sr.h);
-    if (hs.festRect) T('节日横幅在赛季横幅之下', hs.festRect.y >= sr.y + sr.h);
-    // 命中检测
-    const cx = sr.x + sr.w / 2, cy = sr.y + sr.h / 2;
-    T('inSeasonRect 命中中心', hs.inSeasonRect(cx, cy) === true);
-    T('inSeasonRect 命中外部返回 false', hs.inSeasonRect(2, 2) === false);
-    // 入口
-    hs.openSeason();
-    T('openSeason 打开赛季面板（modal 非空）', !!hs.modal);
-  }
+  T('常驻赛季横幅已移除（回收约 48u）', !hs.seasonRect);
+  T('顶栏今日徽章已创建', !!hs.todayBtn);
+  T('顶栏收敛为 3 图标钮 + 1 徽章共 4 个热区', hs.iconBtns.length === 4);
+  T('徽章挂进 iconBtns（命中逻辑自动覆盖）', hs.iconBtns.indexOf(hs.todayBtn) >= 0);
+  T('横幅锚点回到 Hero 卡下方', hs.festBottom >= hs.hero.y + hs.hero.h);
+  hs.openSeason();
+  T('徽章入口打开赛季/签到面板（modal 非空）', !!hs.modal);
 } catch (e) {
   console.log('  ⚠ HomeScene 实例化跳过（' + e.message + '），由数据层/面板测试覆盖');
 }

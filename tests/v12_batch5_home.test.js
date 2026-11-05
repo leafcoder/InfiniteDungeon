@@ -42,7 +42,7 @@ T('festRect 存在', !!hs.festRect);
 T('festRect 在 Hero 卡下方（无重叠）', hs.festRect.y >= hs.hero.y + hs.hero.h);
 T('festRect 不与网格重叠', hs.festRect.y + hs.festRect.h <= hs.gz.y);
 T('festRect 不与顶栏按钮重叠', hs.festRect.y > hs.iconBtns[0].y + hs.iconBtns[0].h);
-T('dock 7 项含任务与无尽', hs.dock.length === 7 && hs.dock[6].key === 'task' && hs.dock[5].key === 'endless');
+T('dock 收敛为 6 项含任务与无尽（排行已下线）', hs.dock.length === 6 && hs.dock[5].key === 'task' && hs.dock[4].key === 'endless');
 T('dock 触摸热区宽 ≥44px（88rpx 规范）', hs.dock[0].w >= 44);
 T('命中判定 inFestPill', hs.inFestPill(hs.festRect.x + 5, hs.festRect.y + 5));
 T('胶囊外命中 false', !hs.inFestPill(10, 10));

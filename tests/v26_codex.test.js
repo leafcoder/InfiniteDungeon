@@ -137,18 +137,20 @@ async function main() {
   const md = Modals.showCodex(sm, null);
   T('标题「地宫图鉴」', md.title === '地宫图鉴');
   const headerRows = md.rows.filter(r => r.header);
-  T('三个分组头 + 里程碑头', headerRows.length === 4);
+  T('三个分组头 + 里程碑头 + 收集与成就头', headerRows.length === 5);
   const locked = md.rows.filter(r => r.title === '？？？');
   T('锁定条目显示 ？？？（18 条）', locked.length === 18);
   const cxRow = md.rows.find(r => r.title && r.title.indexOf('光点') >= 0);
   T('解锁条目显示遭遇次数 ×N', cxRow && cxRow.tag.indexOf('×') === 0);
 
-  console.log('--- 8. showAch 入口接线 ---');
+  console.log('--- 8. 图鉴升为主入口：成就/手记/伙伴收进同一分组 ---');
+  const achEntry = md.rows.find(r => r.title && r.title.indexOf('成就 ') === 0);
+  const jrEntry = md.rows.find(r => r.title && r.title.indexOf('旅人手记') === 0);
+  T('图鉴含成就入口且可点', !!achEntry && typeof achEntry.onTap === 'function');
+  T('图鉴含旅人手记入口且可点', !!jrEntry && typeof jrEntry.onTap === 'function');
   const md2 = Modals.showAch(sm, null);
-  const mAch = md2.rows.find(r => r.title && r.title.indexOf('怪物遭遇') === 0);
-  const iAch = md2.rows.find(r => r.title && r.title.indexOf('道具拾取') === 0);
-  T('怪物行可点进图鉴', typeof mAch.onTap === 'function');
-  T('道具行可点进图鉴', typeof iAch.onTap === 'function');
+  T('成就面板回归纯成就清单（标题「成就」）', md2.title === '成就');
+  T('成就面板不再堆图鉴/伙伴/手记行', !md2.rows.some(r => (r.title || '').indexOf('怪物遭遇') === 0));
 
   console.log('--- 9. GameScene 结算里程碑提示 ---');
   const GameScene = require(path.join(ROOT, 'scene/GameScene.js'));

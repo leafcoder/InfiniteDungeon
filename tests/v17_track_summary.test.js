@@ -42,16 +42,17 @@ function hasTaskRow(m) {
   T('claimRate=75', s1.claimRate === 75);
   T('total=13', s1.total === 13);
 
-  console.log('--- 3. 设置弹窗行显示 ---');
+  console.log('--- 3. 设置弹窗不再暴露开发向数据行（功能清理）---');
   const m0 = Modals.showSettings(sm, function () {});
-  T('有埋点数据时显示任务数据行', hasTaskRow(m0) === true);
-  const row = m0.rows.filter(function (r) { return (r.title || '').indexOf('任务数据') >= 0; })[0];
-  T('行 tag 含领取率', (row.tag || '').indexOf('领取率') >= 0);
+  T('有埋点数据也不显示「任务数据（本机）」行', hasTaskRow(m0) === false);
+  T('不再显示「埋点上报」状态行', !m0.rows.some(r => (r.title || '').indexOf('埋点上报') >= 0));
+  T('挑战码已收进设置二级页', !!m0.rows.filter(function (r) { return r.title === '挑战码'; })[0]);
 
-  console.log('--- 4. 无埋点数据时不显示（零干扰）---');
+  console.log('--- 4. 数据层仍在工作（只是不再展示）---');
+  T('任务漏斗计数未被删除', task.trackSummary().total > 0);
   delete store['maze_task_track_v1'];
   const m1 = Modals.showSettings(sm, function () {});
-  T('无数据时不显示任务数据行', hasTaskRow(m1) === false);
+  T('无数据时同样不显示任务数据行', hasTaskRow(m1) === false);
 
   console.log('--- 5. 重置清除埋点 ---');
   task.track('expose');

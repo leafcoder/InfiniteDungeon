@@ -404,29 +404,17 @@ function showSettings(sm, onClose) {
         }
       }
     ]
-    // 任务漏斗（本机埋点）：纯展示，供运营/自查；无数据时整行不显示，零干扰
-    const ts = task.trackSummary()
-    if (ts.total > 0) {
-      rows.push({
-        ick: 'book', icCol: '#9B8CFF',
-        title: '任务数据（本机）',
-        sub: '曝光 ' + ts.expose + ' · 完成 ' + ts.complete + ' · 领取 ' + ts.claim,
-        tag: '领取率 ' + ts.claimRate + '%', tagColor: '#FFC15E',
-        dim: true
-      })
-    }
-    // 埋点上报状态（本机缓冲）：纯展示，有数据才显示，零干扰、零新增按钮
-    const an = analytics.summary()
-    if (an.buffered > 0 || an.sent > 0) {
-      rows.push({
-        ick: 'book', icCol: '#9AA0C8',
-        title: '埋点上报（本机缓冲）',
-        sub: an.hasTransport ? ('已接后端 · 待上报 ' + an.buffered + ' 条 · 已发 ' + an.sent) : ('未接后端 · 本地暂存 ' + an.buffered + ' 条'),
-        tag: an.hasTransport ? '已启用' : '接口留桩',
-        tagColor: an.hasTransport ? '#6EE7A0' : '#9AA0C8',
-        dim: true
-      })
-    }
+    // 挑战码：低频硬核功能从顶栏收进设置二级页，不再占常驻热区
+    rows.push({
+      ick: 'lock', icCol: '#FFD86E',
+      title: '挑战码', sub: '输入口令挑战自定义词缀关卡',
+      tag: '输入 ›', tagColor: '#FFC15E',
+      onTap: function () {
+        sm.sceneModal(showCode(sm, function (dec) {
+          sm.switch('game', { mode: 'custom', level: dec.level, mods: dec.mods, seed: dec.seed, code: dec.code })
+        }, function () {}))
+      }
+    })
     return {
       title: '设置',
       lines: [L('调整游戏体验', { c: '#FFC15E', b: true, s: 13 })],
@@ -613,59 +601,18 @@ function showAch(sm, onClose) {
       dim: !got
     })
   }
-  // 图鉴收集度（信息行，不可点）
-  const cx = storage.getCodex()
-  let monsterN = 0
-  let itemN = 0
-  for (const k in cx) { if (k.indexOf('m_') === 0) monsterN++; else if (k.indexOf('i_') === 0 || k.indexOf('fx_') === 0) itemN++ }
-  rows.push({ header: '图鉴收集 · 游玩自动收录' })
-  rows.push({
-    ick: 'monster',
-    icCol: '#FF7A92',
-    title: '怪物遭遇 ' + monsterN + ' 种',
-    sub: '与各类怪物照面即收录 · 点开查看图鉴',
-    tag: monsterN >= 6 ? '收集达人' : '收集中',
-    tagColor: monsterN >= 6 ? '#6FE3D2' : '#9AA0C8',
-    onTap: function () { sm.sceneModal(showCodex(sm, onClose)) }
-  })
-  rows.push({
-    ick: 'bag',
-    icCol: '#FF9F6E',
-    title: '道具拾取 ' + itemN + ' 种',
-    sub: '拾取道具与触发机关即收录 · 点开查看图鉴',
-    tag: itemN >= 8 ? '百宝箱' : '收集中',
-    tagColor: itemN >= 8 ? '#6FE3D2' : '#9AA0C8',
-    onTap: function () { sm.sceneModal(showCodex(sm, onClose)) }
-  })
-  // 怪物伙伴（N8）：某类怪物遭遇满 10 次 → 结伴同行
-  const partner = storage.getPartner()
-  const pProg = storage.partnerProgress()
-  const pNext = pProg.filter(function (p) { return !p.unlocked; })
-    .sort(function (a, b) { return b.count - a.count; })[0]
-  rows.push({
-    ick: 'monster',
-    icCol: '#FF7A92',
-    title: partner ? ('伙伴同行：' + partner.meta.emoji + ' ' + partner.meta.name) : '怪物伙伴 · 待结缘',
-    sub: partner ? partner.meta.desc : (pNext ? ('「' + pNext.meta.name + '」遭遇 ' + pNext.count + '/' + storage.PARTNER_NEED + ' 次即结伴') : '与怪物照面累计 ' + storage.PARTNER_NEED + ' 次即结伴'),
-    tag: partner ? '同行中' : '未结缘',
-    tagColor: partner ? '#FFC15E' : '#9AA0C8'
-  })
-  // 旅人手记（N10）：分区首通 + 制霸解锁的轻剧情
-  const jr = storage.journalList().filter(function (j) { return j.unlocked; }).length
-  rows.push({
-    ick: 'book',
-    icCol: '#9B8CFF',
-    title: '旅人手记 ' + jr + '/12 段',
-    sub: '地宫为何沉没，火把从哪来 · 点开阅读',
-    tag: '阅读 ›',
-    tagColor: '#9B8CFF',
-    onTap: function () { sm.sceneModal(showJournal(sm, onClose)) }
-  })
+  // 本机成绩摘要（原「排行榜」下线后迁移至此，不再单占 Dock 入口）
+  // 图鉴 / 伙伴 / 手记已收进图鉴面板，成就面板回归纯成就清单
+  const st = storage.getStats()
+  const prog = storage.getProgress()
+  let stars = 0
+  for (const k in (prog.completed || {})) stars += (prog.completed[k].stars || 1)
   return new Modal(sm, {
-    title: '成就图鉴',
+    title: '成就',
     lines: [
       L('成就 ' + list.filter(function (a) { return a.unlocked; }).length + '/' + list.length + ' · 达成成就永久点亮', { b: true, c: '#FFC15E', s: 13.5 }),
-      L('皮肤收集 ' + storage.getUnlockedSkins().length + '/' + theme.ORDER.length + ' · 光尘解锁更多主题', { c: '#6FE3D2', s: 11.5 })
+      L('皮肤收集 ' + storage.getUnlockedSkins().length + '/' + theme.ORDER.length + ' · 光尘解锁更多主题', { c: '#6FE3D2', s: 11.5 }),
+      L('累计 ★' + stars + ' · 最速 ' + (st.bestTime ? st.bestTime + 's' : '—') + ' · 生存第 ' + (st.bestWave ? st.bestWave + ' 波' : '—'), { c: '#9AA0C8', s: 11 })
     ],
     rows: rows,
     buttons: [{ label: '关闭' }],
@@ -691,7 +638,19 @@ function showSeason(sm, onClose) {
   const info = season.info()
   function buildRows() {
     const s = season.info()
-    const rows = []
+    const inf = checkin.info()
+    // 签到回看与赛季领奖共用「今日徽章」一个入口，签到完成后仍可随时查连续天数
+    const rows = [
+      { header: '今日签到' },
+      {
+        ick: 'daily', icCol: '#FFC15E',
+        title: '每日签到 · 连续 ' + inf.streak + ' 天',
+        sub: inf.signed ? '今日已签到 · 明天再来领光尘' : ('今日可领 ' + inf.todayDust + ' 光尘'),
+        tag: inf.signed ? '已签到' : '签到 ›',
+        tagColor: inf.signed ? '#9AA0C8' : '#6EE7A0',
+        onTap: function () { sm.sceneModal(showCheckin(sm, onClose)) }
+      }
+    ]
     s.claimable.forEach(function (lv) {
       const rw = s.rewardFor(lv)
       rows.push({
@@ -713,8 +672,8 @@ function showSeason(sm, onClose) {
         }
       })
     })
-    if (rows.length === 0) {
-      rows.push({ header: '暂无可领奖励 · 通关 / 完成挑战获取赛季经验' })
+    if (rows.length === 2) {
+      rows.push({ header: '暂无可领赛季奖励 · 通关 / 完成挑战获取赛季经验' })
     }
     return rows
   }
@@ -753,75 +712,6 @@ function showIntro(sm, onClose) {
 }
 
 /* ---------- 排行榜 ---------- */
-
-function showRank(sm, onClose) {
-  const st = storage.getStats()
-  const prog = storage.getProgress()
-  const todayRec = storage.getDaily()[storage.dailyKey()] // 今日挑战成绩（E6：与历史最佳分开）
-  const done = Object.keys(prog.completed || {}).length
-  let stars = 0
-  for (const k in prog.completed) stars += (prog.completed[k].stars || 1)
-  const rows = [
-    {
-      ick: 'map',
-      icCol: '#6FE3D2',
-      title: '通关进度',
-      sub: done >= storage.TOTAL ? '全制霸！地宫已被你踩平' : '距离全制霸还差 ' + (storage.TOTAL - done) + ' 关',
-      tag: done + '/' + storage.TOTAL,
-      tagColor: '#FFC15E'
-    },
-    {
-      ick: 'star',
-      icCol: '#FFD86E',
-      title: '累计星数',
-      sub: '三星通关是最高评价',
-      tag: '★ ' + stars,
-      tagColor: '#FFD86E'
-    },
-    {
-      ick: 'daily',
-      icCol: '#FFC15E',
-      title: '每日挑战最佳',
-      sub: st.bestDaily && st.bestDaily.gems ? '单局最高收集 ' + st.bestDaily.gems + ' 光尘' : '今日布局全服一致，来刷个记录',
-      tag: (st.bestDaily && st.bestDaily.gems ? st.bestDaily.gems + '✦' : '—'),
-      tagColor: '#6FE3D2'
-    },
-    {
-      ick: 'daily',
-      icCol: '#FFC15E',
-      title: '今日挑战（本机）',
-      sub: todayRec && todayRec.gems ? '今日已收 ' + todayRec.gems + '✦，历史最佳 ' + (st.bestDaily && st.bestDaily.gems ? st.bestDaily.gems + '✦' : '—') : '今天还没打过 · 布局全服一致',
-      tag: (todayRec && todayRec.gems ? todayRec.gems + '✦' : '今日'),
-      tagColor: '#FFD86E'
-    },
-    {
-      ick: 'survival',
-      icCol: '#FF7A92',
-      title: '生存模式最佳',
-      sub: st.bestWave ? '在第 ' + st.bestWave + ' 波倒下' : '无尽波次，看你能撑几波',
-      tag: st.bestWave ? '第 ' + st.bestWave + ' 波' : '—',
-      tagColor: '#FF7A92'
-    },
-    {
-      ick: 'bolt',
-      icCol: '#9B8CFF',
-      title: '历史最速通关',
-      sub: st.bestTime ? '最快一局 ' + st.bestTime + ' 秒' : '还没有速通记录',
-      tag: st.bestTime ? st.bestTime + 's' : '—',
-      tagColor: '#9B8CFF'
-    }
-  ]
-  return new Modal(sm, {
-    title: '排行榜',
-    lines: [
-      L('本机成绩总览', { b: true, c: '#FFC15E', s: 13.5 }),
-      L('好友排行可在微信「小游戏」内查看好友名次。', { s: 10.5, c: '#9AA0C8' })
-    ],
-    rows: rows,
-    buttons: [{ label: '关闭' }],
-    onClose: onClose
-  })
-}
 
 /* ---------- 每日挑战 ---------- */
 
@@ -968,12 +858,41 @@ function showCodex(sm, onClose) {
       dim: !got
     }
   })
+  // 收集与成就：图鉴升为主入口后，把原先散在成就面板的 3 个低频系统收进同一分组
+  const achList = storage.achList()
+  const achGot = achList.filter(function (a) { return a.unlocked; }).length
+  const jr = storage.journalList().filter(function (j) { return j.unlocked; }).length
+  const partner = storage.getPartner()
+  const overview = [
+    { header: '收集与成就' },
+    {
+      ick: 'rank', icCol: '#FFC15E',
+      title: '成就 ' + achGot + '/' + achList.length,
+      sub: '达成成就永久点亮 · 含本机成绩摘要',
+      tag: '查看 ›', tagColor: '#FFC15E',
+      onTap: function () { sm.sceneModal(showAch(sm, onClose)) }
+    },
+    {
+      ick: 'book', icCol: '#9B8CFF',
+      title: '旅人手记 ' + jr + '/12 段',
+      sub: '每分区首通与制霸各解锁一段',
+      tag: '阅读 ›', tagColor: '#9B8CFF',
+      onTap: function () { sm.sceneModal(showJournal(sm, onClose)) }
+    },
+    {
+      ick: 'monster', icCol: '#FF7A92',
+      title: partner ? ('伙伴同行：' + partner.meta.emoji + ' ' + partner.meta.name) : '怪物伙伴 · 待结缘',
+      sub: partner ? partner.meta.desc : '与怪物照面累计次数达标即结伴',
+      tag: partner ? '同行中' : '未结缘',
+      tagColor: partner ? '#FFC15E' : '#9AA0C8'
+    }
+  ]
   return new Modal(sm, {
     title: '地宫图鉴',
     lines: [
       L('收录 ' + prog.got + '/' + prog.total + ' · 与怪物照面、拾取道具、触发机关即自动收录', { b: true, c: '#7FD8FF', s: 13 })
     ],
-    rows: [{ header: '收集里程碑' }].concat(msRows).concat(rows),
+    rows: overview.concat([{ header: '收集里程碑' }]).concat(msRows).concat(rows),
     buttons: [{ label: '关闭' }],
     onClose: onClose
   })
@@ -1039,6 +958,8 @@ function showCheckin(sm, onClose) {
 function showDaily(sm, startFn, onClose) {
   const key = storage.dailyKey()
   const rec = storage.getDaily()[key]
+  const st = storage.getStats()
+  const done = Object.keys((storage.getProgress().completed || {})).length
   return new Modal(sm, {
     title: '每日挑战',
     lines: [
@@ -1048,6 +969,8 @@ function showDaily(sm, startFn, onClose) {
       rec
         ? L('今日最佳：' + rec.gems + '✦ · ' + rec.steps + ' 步 · ' + rec.time + 's', { c: '#6FE3D2' })
         : L('今日尚未挑战'),
+      // 原「排行榜」下线后，成绩与进度就近展示在每日挑战入口
+      L('历史最佳 ' + (st.bestDaily && st.bestDaily.gems ? st.bestDaily.gems + '✦' : '—') + ' · 通关 ' + done + '/' + storage.TOTAL, { s: 11, c: '#9AA0C8' }),
       L('完成即得光尘（首次全额，破纪录有加成）。', { s: 12 })
     ],
     buttons: [
@@ -1368,7 +1291,6 @@ module.exports = {
   shardGuide: shardGuide,
   showSettings: showSettings,
   showAch: showAch,
-  showRank: showRank,
   showSeason: showSeason,
   showIntro: showIntro,
   showDaily: showDaily,

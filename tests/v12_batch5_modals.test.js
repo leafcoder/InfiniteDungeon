@@ -26,12 +26,12 @@ function makeSM() {
   };
 }
 
-// showRank 含今日榜行
+// 功能清理：排行榜（实为本机成绩单）下线，成绩并入 showDaily / showAch
 {
+  T('showRank 已从导出移除', typeof Modals.showRank === 'undefined');
   const sm = makeSM();
-  const m = Modals.showRank(sm, () => {});
-  T('showRank 构建', !!m && !!m.rows);
-  T('排行榜含「今日挑战（本机）」行', m.rows.some(r => r.title === '今日挑战（本机）'));
+  const d = Modals.showDaily(sm, () => {}, () => {});
+  T('每日挑战弹窗承接历史最佳/通关进度', !!d && !!d.lines);
 }
 
 // showSupply：技能行出现「试用」；点行 → 二级弹窗含「免费试用 1 局」
