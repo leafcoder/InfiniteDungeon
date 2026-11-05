@@ -12,6 +12,7 @@ global.wx = {
 const storage = require('../minigame/js/core/storage.js');
 const task = require('../minigame/js/core/task.js');
 const TaskPanel = require('../minigame/js/scene/TaskPanel.js');
+task.setDailyThemeOverride('normal'); // 固定标准档，隔离「今日主题」按日轮换对固定 target 断言的影响
 
 let passed = 0, failed = 0;
 function T(name, cond) {

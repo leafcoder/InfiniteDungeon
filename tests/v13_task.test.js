@@ -16,6 +16,7 @@ global.wx = {
 
 const task = require('../minigame/js/core/task.js');
 const storage = require('../minigame/js/core/storage.js');
+task.setDailyThemeOverride('normal'); // 固定标准档，隔离「今日主题」按日轮换对固定 target 断言的影响
 
 // 清空任务相关存储，确保全新
 delete store['maze_task_v1'];

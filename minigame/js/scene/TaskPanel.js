@@ -73,7 +73,14 @@ function build(sm, onClose, isRefresh) {
     tagColor: si.next ? '#FFC15E' : '#6FE3D2',
     dim: !si.next
   })
-  rows.push({ icon: 'daily', title: '【每日任务】', sub: '0 点刷新 · 完成领奖', tag: '', tagColor: '#FFC15E', dim: true })
+  // 今日主题：每天确定性轮换 target/奖励/名称，给玩家「今天有什么新目标」的期待
+  const th = st.theme || task.themeInfo()
+  rows.push({
+    icon: 'daily',
+    title: '【每日任务 · ' + th.label + '】',
+    sub: th.desc + ' · 0 点刷新换主题',
+    tag: '', tagColor: th.color, dim: true
+  })
   st.daily.forEach(function (t) { pushTask(t, '') })
   rows.push({ icon: 'weekly', title: '【每周任务】', sub: '周一 0 点刷新', tag: '', tagColor: '#9B8CFF', dim: true })
   st.weekly.forEach(function (t) { pushTask(t, '') })

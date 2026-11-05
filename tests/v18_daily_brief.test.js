@@ -10,6 +10,7 @@ global.wx = {
 const storage = require(path.join(ROOT, 'core/storage.js'));
 const task = require(path.join(ROOT, 'core/task.js'));
 const HomeScene = require(path.join(ROOT, 'scene/HomeScene.js'));
+task.setDailyThemeOverride('normal'); // 固定标准档，隔离「今日主题」按日轮换对固定 target 断言的影响
 
 let passed = 0, failed = 0;
 function T(name, cond) {

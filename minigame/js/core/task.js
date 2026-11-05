@@ -11,12 +11,49 @@ const storage = require('./storage')
 const TASK_KEY = 'maze_task_v1'
 
 // ---- 任务配置（表驱动）----
+// 基础日常定义：id / 行为类别 / 钩子映射恒定，仅 target、奖励、名称随「今日主题」变化
+// normal 档即 v1.3 原始数值，保证 TASKS.daily 的导出值向后兼容
+const BASE_DAILY = [
+  { id: 'D1', cat: 'collect', name: '今日光尘矿工', desc: '当日累计获得光尘', target: 120, reward: { dust: 20 } },
+  { id: 'D2', cat: 'progress', name: '今日通关达人', desc: '当日通关关卡数', target: 3, reward: { revive: 1 } },
+  { id: 'D3', cat: 'social', name: '今日进圈打卡', desc: '进入游戏圈打卡', target: 1, reward: { dust: 15 } }
+]
+
+// 今日主题：按日期确定性轮换，对抗「每天同样 3 条」的疲劳
+// 三档都是正反馈、没有惩罚档：丰饶日降门槛奖励不减，试炼日提目标也提奖励
+// 奖励只含软货币 / 免费券，绝不发额外广告次数（合规红线）
+const DAILY_THEMES = {
+  easy: {
+    key: 'easy', label: '丰饶日', desc: '目标更轻 · 奖励不减', color: '#6FE3D2', prefix: '丰饶·',
+    targets: { D1: 80, D2: 2, D3: 1 },
+    rewards: { D1: { dust: 20 }, D2: { revive: 1 }, D3: { dust: 15 } }
+  },
+  normal: {
+    key: 'normal', label: '寻常日', desc: '标准目标', color: '#FFC15E', prefix: '',
+    targets: { D1: 120, D2: 3, D3: 1 },
+    rewards: { D1: { dust: 20 }, D2: { revive: 1 }, D3: { dust: 15 } }
+  },
+  hard: {
+    key: 'hard', label: '试炼日', desc: '目标更高 · 奖励更丰', color: '#E36BFF', prefix: '试炼·',
+    targets: { D1: 180, D2: 5, D3: 1 },
+    rewards: { D1: { dust: 35 }, D2: { revive: 2 }, D3: { dust: 20 } }
+  }
+}
+function buildDaily(v) {
+  const th = DAILY_THEMES[v] || DAILY_THEMES.normal
+  return BASE_DAILY.map(function (t) {
+    return {
+      id: t.id, cat: t.cat,
+      name: th.prefix + t.name,
+      desc: t.desc,
+      target: th.targets[t.id] != null ? th.targets[t.id] : t.target,
+      reward: th.rewards[t.id] || t.reward
+    }
+  })
+}
+
 const TASKS = {
-  daily: [
-    { id: 'D1', cat: 'collect', name: '今日光尘矿工', desc: '当日累计获得光尘', target: 120, reward: { dust: 20 } },
-    { id: 'D2', cat: 'progress', name: '今日通关达人', desc: '当日通关关卡数', target: 3, reward: { revive: 1 } },
-    { id: 'D3', cat: 'social', name: '今日进圈打卡', desc: '进入游戏圈打卡', target: 1, reward: { dust: 15 } }
-  ],
+  daily: buildDaily('normal'),   // 导出恒为标准档（兼容旧调用方与回归断言）
   weekly: [
     { id: 'W1', cat: 'progress', name: '本周塔尖挑战', desc: '本周无尽塔最深层', target: 15, reward: { frame: '登塔者' } },
     { id: 'W2', cat: 'collect', name: '本周光尘积累', desc: '本周累计获得光尘', target: 800, reward: { unlock: 1 } }
@@ -52,8 +89,45 @@ function cosmeticMeta(kind, id) {
   return { name: id, desc: '', color: '#FFFFFF' }
 }
 
-const ALL = TASKS.daily.concat(TASKS.weekly)
-function defOf(id) { return ALL.filter(function (x) { return x.id === id })[0] }
+// ---- 今日主题解析 ----
+// 测试/调试用：固定档位，隔离按日轮换对回归断言的影响；生产恒为空串
+let THEME_OVERRIDE = ''
+// 缓存当天生效定义：hasClaimable() 每帧被调用，命中缓存后 defOf 零存储 IO
+let DEFS_CACHE = { key: '', daily: null, all: null }
+
+// 同一天所有设备结果一致；周末固定「丰饶日」降门槛，把回访福利绑定到玩家更可能上线的时机
+function variantOfDay(key) {
+  const p = String(key || '').split('-')
+  if (p.length !== 3) return 'normal'
+  const d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]))
+  if (isNaN(d.getTime())) return 'normal'
+  const dow = d.getDay()
+  if (dow === 0 || dow === 6) return 'easy'
+  let h = 0
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 997
+  const r = h % 5
+  return r === 0 ? 'hard' : (r <= 2 ? 'normal' : 'easy')
+}
+function setDailyThemeOverride(v) {
+  THEME_OVERRIDE = (v && DAILY_THEMES[v]) ? v : ''
+  DEFS_CACHE = { key: '', daily: null, all: null }
+}
+function activeThemeKey(s) {
+  if (THEME_OVERRIDE) return THEME_OVERRIDE
+  return (s && s.theme && DAILY_THEMES[s.theme]) ? s.theme : 'normal'
+}
+function themeInfo() {
+  const th = DAILY_THEMES[activeThemeKey(ensure())] || DAILY_THEMES.normal
+  return { key: th.key, label: th.label, desc: th.desc, color: th.color, targets: th.targets }
+}
+function activeAll() {
+  const k = storage.dailyKey() + '|' + THEME_OVERRIDE
+  if (DEFS_CACHE.key === k && DEFS_CACHE.all) return DEFS_CACHE.all
+  const daily = buildDaily(activeThemeKey(ensure()))
+  DEFS_CACHE = { key: k, daily: daily, all: daily.concat(TASKS.weekly) }
+  return DEFS_CACHE.all
+}
+function defOf(id) { return activeAll().filter(function (x) { return x.id === id })[0] }
 
 // ---- 周 key（ISO 周，周一为一周开始）----
 function weekKey() {
@@ -91,7 +165,8 @@ function freshState() {
     week: weekKey(),
     daily: TASKS.daily.map(function (t) { return { id: t.id, progress: 0, claimed: false } }),
     weekly: TASKS.weekly.map(function (t) { return { id: t.id, progress: 0, claimed: false } }),
-    fullStreak: 0, lastFullDate: '', streakAwarded: []
+    fullStreak: 0, lastFullDate: '', streakAwarded: [],
+    theme: variantOfDay(storage.dailyKey())
   }
 }
 
@@ -107,10 +182,13 @@ function ensure() {
   if (typeof s.fullStreak !== 'number') { s.fullStreak = 0; changed = true }
   if (typeof s.lastFullDate !== 'string') { s.lastFullDate = ''; changed = true }
   if (!Array.isArray(s.streakAwarded)) { s.streakAwarded = []; changed = true }
+  // 旧存档（v1.9 及以前）缺 theme：按当天日期补算，原 daily/weekly 进度不丢
+  if (!DAILY_THEMES[s.theme]) { s.theme = variantOfDay(dk); changed = true }
   if (s.date !== dk) {
     // 断签判定：上次全勤既不是今天也不是昨天 → 连续清零；否则保留（今天仍可续上）
     if (s.lastFullDate !== dk && s.lastFullDate !== prevDay(dk)) s.fullStreak = 0
     s.date = dk
+    s.theme = variantOfDay(dk)   // 跨天重算今日主题（与 daily 一起刷新）
     s.daily = TASKS.daily.map(function (t) { return { id: t.id, progress: 0, claimed: false } })
     changed = true
   }
@@ -185,7 +263,8 @@ function getState() {
     weekly: s.weekly.map(function (t) { return wrap('weekly', t) }),
     dailyFull: s.daily.length > 0 && s.daily.every(function (t) { return t.claimed }),
     weeklyFull: s.weekly.length > 0 && s.weekly.every(function (t) { return t.claimed }),
-    fullStreak: s.fullStreak || 0
+    fullStreak: s.fullStreak || 0,
+    theme: themeInfo()
   }
 }
 function hasClaimable() {
@@ -303,12 +382,18 @@ function dailyBrief() {
   else if (claimable > 0) text = '今日 ' + done + '/' + total + ' · ' + claimable + ' 个奖励待领'
   else if (remain === 1) text = '今日 ' + done + '/' + total + ' · 再完成 1 个即得 ' + shard + ' 碎片'
   else text = '今日 ' + done + '/' + total + ' · 全勤可得 ' + shard + ' 碎片'
-  return { total: total, done: done, claimed: claimed, claimable: claimable, full: st.dailyFull, remain: remain, text: text }
+  return {
+    total: total, done: done, claimed: claimed, claimable: claimable,
+    full: st.dailyFull, remain: remain, text: text, theme: st.theme
+  }
 }
 
 module.exports = {
-  TASKS: TASKS, FULL_DAILY: FULL_DAILY, FULL_WEEKLY: FULL_WEEKLY, FULL_STREAK: FULL_STREAK,
+  TASKS: TASKS, BASE_DAILY: BASE_DAILY, DAILY_THEMES: DAILY_THEMES,
+  FULL_DAILY: FULL_DAILY, FULL_WEEKLY: FULL_WEEKLY, FULL_STREAK: FULL_STREAK,
   COSMETIC_META: COSMETIC_META,
+  buildDaily: buildDaily, variantOfDay: variantOfDay, themeInfo: themeInfo,
+  setDailyThemeOverride: setDailyThemeOverride,
   weekKey: weekKey, prevDay: prevDay, ensure: ensure,
   onDust: onDust, onClear: onClear, onGameClubTap: onGameClubTap, onEndlessDepth: onEndlessDepth,
   getState: getState, hasClaimable: hasClaimable, claim: claim, track: track,

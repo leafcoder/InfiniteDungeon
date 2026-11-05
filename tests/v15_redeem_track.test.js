@@ -15,6 +15,7 @@ global.wx = {
 };
 const task = require('../minigame/js/core/task.js');
 const storage = require('../minigame/js/core/storage.js');
+task.setDailyThemeOverride('normal'); // 固定标准档，隔离「今日主题」按日轮换对固定 target 断言的影响
 const theme = require('../minigame/js/core/theme.js');
 
 ['maze_task_v1', 'maze_coupon_v1', 'maze_shard_v1', 'maze_cosmetics_v1', 'maze_skins_v1', 'maze_task_track_v1']
