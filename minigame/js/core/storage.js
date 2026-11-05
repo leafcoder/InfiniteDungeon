@@ -1,4 +1,6 @@
 // 本地进度存储（单机，无需后端）
+// 埋点上报层：单向依赖（analytics 不 require storage），无后端时仅写本地缓冲
+const analytics = require('./analytics');
 const KEY = 'maze_progress_v1';
 const TUT_KEY = 'maze_tutorial_v1';
 const THEME_KEY = 'maze_theme_v1';
@@ -502,7 +504,8 @@ function resetProgress() {
     'maze_codebest_v1', 'maze_combo_v1', 'maze_ghost_v1', 'maze_flags_v1',
     'maze_trial_v1', 'maze_skills_v1',
     'maze_task_v1', 'maze_coupon_v1', 'maze_shard_v1', 'maze_cosmetics_v1', 'maze_task_track_v1',
-    'maze_season_v1', 'maze_checkin_v1', 'maze_ngplus_v1', 'maze_mercy_v1'
+    'maze_season_v1', 'maze_checkin_v1', 'maze_ngplus_v1', 'maze_mercy_v1',
+    'maze_analytics_v1'
   ];
   for (let i = 0; i < keys.length; i++) {
     try { wx.removeStorageSync(keys[i]) } catch (e) {}
@@ -714,6 +717,8 @@ function unlockAch(id) {
   const def = ACHS.filter(function (x) { return x.id === id; })[0];
   const reward = def ? (def.reward || 0) : 0;
   if (reward > 0) addDust(reward);
+  // 埋点：成就解锁（无论来源是通关 / 图鉴里程碑 / 魔弹，均在此单点上报）
+  try { analytics.track('ach_unlock', { id: id, reward: reward }) } catch (e) {}
   return reward;
 }
 

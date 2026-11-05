@@ -17,6 +17,7 @@ const ngplus = require('../core/ngplus')
 const season = require('../core/season')
 const codex = require('../core/codex')
 const mercy = require('../core/mercy')
+const analytics = require('../core/analytics')
 const PlayCore = require('../core/play')
 const Modal = require('../ui/Modal')
 const Icons = require('../ui/Icons')
@@ -728,6 +729,11 @@ GameScene.prototype.onWin = function (st) {
   const stars = ratio >= 1 ? 3 : ratio >= 0.6 ? 2 : 1
   let dustEarn
   let extra = []
+  // 埋点：通关事件（统一上报层；无后端时降级本地缓冲，零网络请求）
+  try {
+    const winEv = ({ level: 'level_win', daily: 'daily_win', weekly: 'weekly_win', festival: 'festival_win', endless: 'endless_depth' })[this.mode] || 'level_win'
+    analytics.track(winEv, { level: this.level, stars: stars, gems: st.gems, gemTotal: st.gemTotal })
+  } catch (e) {}
   // 魔弹击杀成就：累计本局 bow 击杀，跨模式统一解锁（每日/周/节日/无尽塔均计入）
   try {
     const bowAch = storage.recordBowKills(this.core.kills)
@@ -885,6 +891,8 @@ GameScene.prototype.ghostPathCandidate = function (st) {
 GameScene.prototype.onFail = function (reason) {
   const self = this
   let extra = []
+  // 埋点：失败事件（连败 / 难度兜底的数据依据）
+  try { analytics.track('level_fail', { level: this.level, reason: String(reason || '').slice(0, 32) }) } catch (e) {}
   storage.resetCombo() // 连击中断
   // 连败保护记录：主线关卡累积同关连败；提示下一局轻减
   if (this.mode === 'level' && !this.code) {

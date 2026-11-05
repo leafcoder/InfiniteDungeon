@@ -20,6 +20,7 @@ const checkin = require('../core/checkin')
 const ngplus = require('../core/ngplus')
 const codex = require('../core/codex')
 const season = require('../core/season')
+const analytics = require('../core/analytics')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
 const TaskPanel = require('../scene/TaskPanel')
@@ -414,6 +415,18 @@ function showSettings(sm, onClose) {
         dim: true
       })
     }
+    // 埋点上报状态（本机缓冲）：纯展示，有数据才显示，零干扰、零新增按钮
+    const an = analytics.summary()
+    if (an.buffered > 0 || an.sent > 0) {
+      rows.push({
+        ick: 'book', icCol: '#9AA0C8',
+        title: '埋点上报（本机缓冲）',
+        sub: an.hasTransport ? ('已接后端 · 待上报 ' + an.buffered + ' 条 · 已发 ' + an.sent) : ('未接后端 · 本地暂存 ' + an.buffered + ' 条'),
+        tag: an.hasTransport ? '已启用' : '接口留桩',
+        tagColor: an.hasTransport ? '#6EE7A0' : '#9AA0C8',
+        dim: true
+      })
+    }
     return {
       title: '设置',
       lines: [L('调整游戏体验', { c: '#FFC15E', b: true, s: 13 })],
@@ -691,6 +704,7 @@ function showSeason(sm, onClose) {
         onTap: function (m) {
           const r = season.claim(lv)
           if (r.ok) {
+            try { analytics.track('season_claim', { level: lv }) } catch (e) {}
             sm.toast('已领取 Lv.' + lv + ' 奖励')
             if (m && m.rows) m.rows = buildRows() // 刷新列表
           } else {
@@ -990,6 +1004,7 @@ function showCheckin(sm, onClose) {
       onTap: function () {
         const r = checkin.sign()
         if (!r.ok) { sm.toast('今日已签到'); sm.sceneModal(showCheckin(sm, onClose)); return }
+        try { analytics.track('checkin', { streak: r.streak, dust: inf.todayDust }) } catch (e) {}
         let msg = '签到成功 · +' + inf.todayDust + ' 光尘 · 连续 ' + r.streak + ' 天'
         if (r.msGot.length) {
           const skinGot = r.msGot.some(function (g) { return g.kind === 'skin' })
