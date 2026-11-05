@@ -220,11 +220,29 @@ function trackSummary() {
   }
 }
 
+// 今日任务摘要：首页 Dock 与结算页共用的单一文案源
+// done = 已达标（含已领取）；remain = 还差几个达标；text 随状态给出下一步动机
+function dailyBrief() {
+  const st = getState()
+  const total = st.daily.length
+  const done = st.daily.filter(function (t) { return t.progress >= t.target }).length
+  const claimed = st.daily.filter(function (t) { return t.claimed }).length
+  const claimable = st.daily.filter(function (t) { return t.canClaim }).length
+  const remain = Math.max(0, total - done)
+  const shard = FULL_DAILY.shard || 0
+  let text
+  if (st.dailyFull) text = '今日全勤达成 · ' + shard + ' 碎片已入库'
+  else if (claimable > 0) text = '今日 ' + done + '/' + total + ' · ' + claimable + ' 个奖励待领'
+  else if (remain === 1) text = '今日 ' + done + '/' + total + ' · 再完成 1 个即得 ' + shard + ' 碎片'
+  else text = '今日 ' + done + '/' + total + ' · 全勤可得 ' + shard + ' 碎片'
+  return { total: total, done: done, claimed: claimed, claimable: claimable, full: st.dailyFull, remain: remain, text: text }
+}
+
 module.exports = {
   TASKS: TASKS, FULL_DAILY: FULL_DAILY, FULL_WEEKLY: FULL_WEEKLY, COSMETIC_META: COSMETIC_META,
   weekKey: weekKey, ensure: ensure,
   onDust: onDust, onClear: onClear, onGameClubTap: onGameClubTap, onEndlessDepth: onEndlessDepth,
   getState: getState, hasClaimable: hasClaimable, claim: claim, track: track,
-  shardNeed: shardNeed, trackSummary: trackSummary,
+  shardNeed: shardNeed, trackSummary: trackSummary, dailyBrief: dailyBrief,
   cosmeticMeta: cosmeticMeta
 }

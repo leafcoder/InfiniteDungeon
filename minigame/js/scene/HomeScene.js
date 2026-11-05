@@ -168,6 +168,9 @@ HomeScene.prototype.enter = function () {
   this.gridSc.setContent(rows * this.chh + (rows - 1) * this.gap)
   this.gridAnim = 1
 
+  // 今日任务摘要：进页时缓存一次，避免 drawDock 每帧同步读存储；任务面板关闭时刷新
+  this.taskBrief = task.dailyBrief()
+
   this.touchDown = null
   this.dirty = true
 
@@ -315,7 +318,10 @@ HomeScene.prototype.openEntry = function (key) {
       this.sm.switch('game', { mode: 'survival', level: 30 })
     }
   } else if (key === 'task') {
-    this.modal = require('./TaskPanel').build(this.sm, function () { self.modal = null })
+    this.modal = require('./TaskPanel').build(this.sm, function () {
+      self.modal = null
+      self.taskBrief = task.dailyBrief() // 领奖/查看后刷新 Dock 进度
+    })
   }
 }
 
@@ -1133,13 +1139,17 @@ HomeScene.prototype.drawDock = function (ctx, v) {
     ctx.fillRect(cx - 26 * u, cy - 26 * u, 52 * u, 52 * u)
     // 矢量图标
     drawDockIcon(ctx, d.key, cx, cy, 13 * u, col)
-    // 标签
+    // 标签：任务入口直接显示今日进度，不点开面板也能看到全勤还差几个
+    // 用 enter() 缓存的摘要（面板关闭时刷新），避免每帧同步读存储
+    const brief = d.key === 'task' ? (this.taskBrief || task.dailyBrief()) : null
     ctx.textAlign = 'center'
-    ctx.fillStyle = d.key === 'survival' ? '#FFB9C6' : v['--text']
+    ctx.fillStyle = brief
+      ? (brief.full ? '#6FE3D2' : (brief.claimable > 0 ? '#FFC15E' : v['--text']))
+      : (d.key === 'survival' ? '#FFB9C6' : v['--text'])
     ctx.font = Math.round(10 * u) + 'px sans-serif'
-    ctx.fillText(d.label, cx, d.y + 46 * u)
+    ctx.fillText(brief ? '任务 ' + brief.done + '/' + brief.total : d.label, cx, d.y + 46 * u)
     // 任务入口红点：存在可领任务时提示
-    if (d.key === 'task' && task.hasClaimable()) {
+    if (brief && brief.claimable > 0) {
       ctx.fillStyle = '#FF4D5E'
       ctx.beginPath()
       ctx.arc(d.x + d.w - 8 * u, d.y + 7 * u, 5 * u, 0, Math.PI * 2)

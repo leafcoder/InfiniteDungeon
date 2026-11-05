@@ -759,7 +759,9 @@ GameScene.prototype.onWin = function (st) {
     title: '通关！' + '★'.repeat(stars) + '☆'.repeat(3 - stars),
     lines: [
       '用时 ' + st.time + 's · 光尘 ' + st.gems + '/' + st.gemTotal + (timeOK ? ' ⚡' : ''),
-      '光尘 +' + dustEarn + '✦（' + st.gems + '/' + st.gemTotal + '）' + extra.join(' ')
+      '光尘 +' + dustEarn + '✦（' + st.gems + '/' + st.gemTotal + '）' + extra.join(' '),
+      // 通关后任务进度已由 completeLevel 更新，此处给出「再玩一关就全勤」的下一步动机
+      '📋 ' + task.dailyBrief().text
     ],
     btns: [
       { label: this.mode === 'weekly' && this.weekIdx < 4 ? '下一关' : '继续', onTap: function () { self.afterRound(true) } },
@@ -1824,7 +1826,8 @@ GameScene.prototype.drawOverlay = function (ctx, v, u) {
   ctx.fillStyle = v['--text-sub']
   ctx.font = Math.round(13 * u) + 'px sans-serif'
   for (let i = 0; i < info.lines.length; i++) {
-    ctx.fillText(info.lines[i], W / 2, py + 76 * u + i * 22 * u)
+    // maxWidth 兜底：长文案（如任务进度行）不溢出面板，超宽时由 Canvas 压缩字宽
+    ctx.fillText(info.lines[i], W / 2, py + 76 * u + i * 22 * u, pw - 40 * u)
   }
   for (let i = 0; i < ov.btns.length; i++) ov.btns[i].draw(ctx)
   ctx.restore()
