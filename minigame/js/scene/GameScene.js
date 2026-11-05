@@ -15,6 +15,7 @@ const festival = require('../core/festival')
 const mutation = require('../core/mutation')
 const ngplus = require('../core/ngplus')
 const codex = require('../core/codex')
+const mercy = require('../core/mercy')
 const PlayCore = require('../core/play')
 const Modal = require('../ui/Modal')
 const Icons = require('../ui/Icons')
@@ -95,6 +96,9 @@ GameScene.prototype.enter = function (params) {
     }
   }
   this.code = params.code || null // 挑战口令原文（本口令最佳纪录用）
+  // 连败保护：仅主线关卡生效（daily/weekly/survival/endless/festival 不做轻减保公平）
+  this.mercyStreak = (this.mode === 'level' && !params.code) ? mercy.streakFor(this.level) : 0
+  this.mercyInfo = this.mercyStreak >= 2 ? mercy.mercyFor(this.level, this.mercyStreak) : null
   if (this.mode === 'daily' && !this.seed) this.seed = storage.dailySeed()
   this.hudH = (this.sm.sat || 0) + 92 * u
   // 节日活动关（N12）：本局强制活动主题氛围，不改玩家存档主题
@@ -133,6 +137,14 @@ GameScene.prototype.enter = function (params) {
   if (this.ngCycle > 0) {
     this.banner = { text: '⟳ 第 ' + this.ngCycle + ' 轮回 · 光尘 ×' + ngplus.dustMul(this.ngCycle) + ' · 强化词缀生效', until: Date.now() + 2600, color: '#E36BFF' }
     this.setHint('第 ' + this.ngCycle + ' 轮回 · 词缀：' + (ngplus.modsFor(this.ngCycle).join('+') || '无'))
+  }
+  // 连败保护提示：卡关轻减让玩家知道地宫在帮他（放在 banner 重置之后）
+  if (this.mercyInfo) {
+    const mi = this.mercyInfo
+    this.banner = {
+      text: '💪 连败保护 · ' + (mi.slow < 1 ? '怪物减速 ' : '') + '开局无敌 ' + (mi.extraInvuln / 1000) + 's · 开局送「' + (require('../render/board').FX_GLYPH[mi.gift] || '') + '」',
+      until: Date.now() + 2600, color: '#6FE3D2'
+    }
   }
   // 新手引导（E5）：仅普通关卡 + 设置开关开启时生效
   this.tutOn = this.mode === 'level' && storage.getSetting('tutorial', true)
@@ -181,7 +193,8 @@ GameScene.prototype.buildCore = function () {
     mods: this.mods,
     survival: this.mode === 'survival',
     fxDur: function (t) { return storage.fxDuration(t) },
-    stepMul: stepMul
+    stepMul: stepMul,
+    mercy: this.mercyInfo
   })
   // 拾光天赋：迷雾视野半径放大（revealAround 运行时读取 viewMul）
   core.viewMul = storage.viewMul()
@@ -705,6 +718,8 @@ GameScene.prototype.shareWin = function (st, stars) {
 
 GameScene.prototype.onWin = function (st) {
   const best = this.core.bestSteps || 1
+  // 连败保护：通关即清零（换关失败会重开计数，通关彻底复位）
+  if (this.mode === 'level' && !this.code) mercy.recordWin()
   // 时间达标仅用于「极速行者」成就，不再参与星级
   const timeOK = st.time <= Math.max(8, Math.round(best * 0.45))
   // 星级（v1.2 反馈调整）：步数/操作/时间不再关联星级，只看光尘收集率——全收 3 星、≥60% 2 星、通关保底 1 星
@@ -860,6 +875,11 @@ GameScene.prototype.onFail = function (reason) {
   const self = this
   let extra = []
   storage.resetCombo() // 连击中断
+  // 连败保护记录：主线关卡累积同关连败；提示下一局轻减
+  if (this.mode === 'level' && !this.code) {
+    const fs = mercy.recordFail(this.level)
+    if (fs >= 2) extra.push('💪 连败保护 ' + fs + ' · 下一局怪物减速 + 开局无敌延长')
+  }
   // 生存模式：阵亡记录最佳波数 + 结算光尘（N1：贪金天赋 +25%/级）
   if (this.mode === 'survival') {
     const reached = Math.max(1, this.core.wave || 1)

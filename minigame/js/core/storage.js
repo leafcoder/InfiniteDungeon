@@ -502,7 +502,7 @@ function resetProgress() {
     'maze_codebest_v1', 'maze_combo_v1', 'maze_ghost_v1', 'maze_flags_v1',
     'maze_trial_v1', 'maze_skills_v1',
     'maze_task_v1', 'maze_coupon_v1', 'maze_shard_v1', 'maze_cosmetics_v1', 'maze_task_track_v1',
-    'maze_season_v1', 'maze_checkin_v1', 'maze_ngplus_v1'
+    'maze_season_v1', 'maze_checkin_v1', 'maze_ngplus_v1', 'maze_mercy_v1'
   ];
   for (let i = 0; i < keys.length; i++) {
     try { wx.removeStorageSync(keys[i]) } catch (e) {}

@@ -27,6 +27,7 @@ function PlayCore(level, opts) {
   this.fxDur = opts.fxDur || function () { return 8000 }
   this.stepMul = opts.stepMul || 1     // 疾风天赋步频倍率（<1 更快）
   this.survTalents = {}                // 生存波间天赋计数（N1，当局有效）
+  this.mercyOpt = opts.mercy || null   // 连败保护参数（mercy.mercyFor 输出）
   this.events = []
   this.now = 0
   this._t0 = null
@@ -152,6 +153,12 @@ PlayCore.prototype.initLevel = function () {
   // 词缀：疾走（怪物提速）/ 泥沼（玩家步速降低）
   if (this.modOn('haste')) this.monsterStepMs = Math.round(this.monsterStepMs * 0.8)
   if (this.modOn('slow')) this.baseStepMul = 1.4
+  // 连败保护：同关连败时怪物减速（与词缀叠加，方向一致更明显）
+  this.mercy = this.mercyOpt
+  if (this.mercy && this.mercy.slow < 1) {
+    this.monsterStepMs = Math.round(this.monsterStepMs * this.mercy.slow)
+    this.fleeStepMs = Math.max(300, Math.round(this.monsterStepMs * 1.25))
+  }
   // Boss 限时追逐（L76–100，生存/虚空关禁用）：伪 Boss L76-79 固定 45s
   this.bossOn = level >= 76 && level <= 100 && !this.survival && !!this.findBoss()
   this.pseudoBoss = this.bossOn && level <= 79
@@ -214,9 +221,17 @@ PlayCore.prototype.initLevel = function () {
   this.collected = 0
   this.bag = []
   this.bagSel = 0
+  // 连败保护：开局补给 1 个基础道具（确定性选取）
+  if (this.mercy && this.mercy.gift) {
+    this.bag.push({ type: this.mercy.gift, count: 1 })
+  }
   this.hasKey = false
   this.shield = false
   this.invulnUntil = 0
+  // 连败保护：开局无敌延长（core.now 首帧前为 0，须用墙钟）
+  if (this.mercy && this.mercy.extraInvuln) {
+    this.invulnUntil = Date.now() + this.mercy.extraInvuln
+  }
   this.fx = { cloak: 0, freeze: 0, dash: 0, magnet: 0, flare: 0, decoy: 0 }
   this.decoyPos = null
   this.portalCd = false
