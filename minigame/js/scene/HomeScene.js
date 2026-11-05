@@ -15,6 +15,7 @@ const challenge = require('../core/challenge')
 const ad = require('../core/ad')
 const endless = require('../core/endless')
 const festival = require('../core/festival')
+const mutation = require('../core/mutation')
 const task = require('../core/task')
 const Icons = require('../ui/Icons')
 const club = require('../ui/gameclub')
@@ -154,6 +155,13 @@ HomeScene.prototype.enter = function () {
     : null
   // 活动横幅占位：圆点指示器与关卡网格的纵向锚点随之下移
   this.festBottom = this.festRect ? this.festRect.y + this.festRect.h + 8 * u : this.hero.y + this.hero.h + 10 * u
+  // 地宫异变横幅：与节日横幅共用 Hero 卡正下方槽位（节日优先，避免纵向挤压网格）；
+  // 仅挑战词缀日显示（宁静日不占版面），纯展示不可点
+  this.mut = mutation.today()
+  this.mutRect = (!this.fest && this.mut && this.mut.mods.length > 0)
+    ? { x: 16 * u, y: this.hero.y + this.hero.h + 8 * u, w: W - 32 * u, h: 36 * u }
+    : null
+  if (this.mutRect) this.festBottom = this.mutRect.y + this.mutRect.h + 8 * u
   this.heroSc = new ScrollView({ x: this.hero.x, y: this.hero.y, w: this.hero.w, h: this.hero.h, horizontal: true })
   // 分区切换：左右滑动 + 圆点指示器（反馈：两侧箭头与手势重复且挤占空间，已移除）
 
@@ -391,6 +399,44 @@ HomeScene.prototype.drawFestBanner = function (ctx, v) {
   ctx.fillStyle = 'rgba(255,233,168,' + (0.70 + 0.30 * pulse) + ')'
   ctx.font = 'bold ' + Math.round(12.5 * u) + 'px sans-serif'
   ctx.fillText('进入 ›', r.x + r.w - 16 * u, r.y + r.h / 2 + 1)
+  ctx.textBaseline = 'alphabetic'
+  ctx.restore()
+}
+
+// 地宫异变横幅：今日词缀 + 光尘补偿提示（纯展示，不可点；节日活动期间让位隐藏）
+HomeScene.prototype.drawMutBanner = function (ctx, v) {
+  if (!this.mutRect || !this.mut) return
+  const u = this.u
+  const e = this.ent(2)
+  if (e <= 0) return
+  const r = this.mutRect
+  ctx.save()
+  ctx.globalAlpha = e
+  ctx.translate(0, (1 - e) * 10)
+  const pulse = 0.5 + 0.5 * fx.pulse(1800, 0)
+  roundRect(ctx, r.x, r.y, r.w, r.h, 18 * u)
+  ctx.fillStyle = 'rgba(155,140,255,' + (0.14 + 0.05 * pulse) + ')'
+  ctx.fill()
+  ctx.lineWidth = 1
+  ctx.strokeStyle = this.mut.color
+  ctx.stroke()
+  // 左侧圆徽：四芒星矢量图标，异变主色
+  const cx = r.x + 26 * u
+  const cy = r.y + r.h / 2
+  ctx.beginPath()
+  ctx.arc(cx, cy, 15 * u, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(200,190,255,0.18)'
+  ctx.fill()
+  Icons.drawIcon(ctx, 'spark', cx, cy + 1, 16 * u, this.mut.color)
+  // 异变名 + 补偿说明
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#DCD6FF'
+  ctx.font = 'bold ' + Math.round(14 * u) + 'px sans-serif'
+  ctx.fillText('⚗ ' + this.mut.name, r.x + 50 * u, r.y + r.h / 2 - 6 * u)
+  ctx.fillStyle = 'rgba(220,214,255,0.62)'
+  ctx.font = Math.round(9.5 * u) + 'px sans-serif'
+  ctx.fillText(this.mut.desc, r.x + 50 * u, r.y + r.h / 2 + 9 * u)
   ctx.textBaseline = 'alphabetic'
   ctx.restore()
 }
@@ -678,6 +724,7 @@ HomeScene.prototype.draw = function (ctx) {
   this.drawTopBar(ctx, v)
   this.drawHero(ctx, v)
   this.drawFestBanner(ctx, v)
+  this.drawMutBanner(ctx, v)
   this.drawDots(ctx, v)
   this.drawGrid(ctx, v)
   this.goBtn.draw(ctx)

@@ -12,6 +12,7 @@ const challenge = require('../core/challenge')
 const ad = require('../core/ad')
 const endless = require('../core/endless')
 const festival = require('../core/festival')
+const mutation = require('../core/mutation')
 const PlayCore = require('../core/play')
 const Modal = require('../ui/Modal')
 const Icons = require('../ui/Icons')
@@ -79,6 +80,12 @@ GameScene.prototype.enter = function (params) {
     this.level = Math.max(1, Math.min(params.level || 1, storage.TOTAL))
     this.mods = params.mods || []
     this.seed = params.seed
+    // 地宫异变：普通关（非 Boss 追逐 L80+）且无外部词缀（口令/周挑战）时，挂今日变异词缀
+    this.mut = null
+    if (this.mode === 'level' && this.mods.length === 0 && !params.code && this.level < 80) {
+      this.mut = mutation.today()
+      this.mods = this.mut.mods.slice()
+    }
   }
   this.code = params.code || null // 挑战口令原文（本口令最佳纪录用）
   if (this.mode === 'daily' && !this.seed) this.seed = storage.dailySeed()
@@ -110,6 +117,11 @@ GameScene.prototype.enter = function (params) {
   this.banner = null
   this.redFlash = 0
   this.whiteFlash = 0
+  // 地宫异变开局提示：让玩家立刻知道今天的地宫有什么不同与补偿
+  // （必须放在上方 banner 重置之后，否则会被清掉）
+  if (this.mut && this.mut.mods.length > 0) {
+    this.banner = { text: '⚗ ' + this.mut.name + ' · ' + this.mut.desc, until: Date.now() + 2600, color: this.mut.color }
+  }
   // 新手引导（E5）：仅普通关卡 + 设置开关开启时生效
   this.tutOn = this.mode === 'level' && storage.getSetting('tutorial', true)
   this._bagCount = 0
@@ -751,6 +763,11 @@ GameScene.prototype.onWin = function (st) {
         dustEarn += comboBonus
         extra.push('连击 x' + combo + ' +' + comboBonus + '✦')
       }
+    }
+    // 地宫异变补偿：挑战词缀日光尘加成（放在 addDust 之前，联动任务/赛季进度口径一致）
+    if (this.mut && this.mut.bonus > 1) {
+      dustEarn = mutation.applyBonus(dustEarn, this.mut)
+      extra.push('⚗ ' + this.mut.name + ' ×' + this.mut.bonus)
     }
     storage.addDust(dustEarn)
   } catch (e) {
