@@ -113,6 +113,12 @@ function onDepth(d) {
   return info()
 }
 
+// 异变日联动赛季 XP：词缀日（bonus>1）通关额外奖励，词缀越难给得越多（12/16/20），宁静日/非异变返回 0
+function mutationXp(mut) {
+  if (!mut || !(mut.bonus > 1)) return 0
+  return Math.round(20 * (mut.bonus - 1) / 0.5)
+}
+
 // ---- 领奖 ----
 // 复用 task.applyReward 发放（懒加载避免 task→season→task 静态环）
 function claim(levelNo) {
@@ -134,5 +140,5 @@ function claim(levelNo) {
 module.exports = {
   SEASON_KEY: SEASON_KEY, SEASON_LEN: SEASON_LEN, SEASON_LEVELS: SEASON_LEVELS, XP_PER_LEVEL: XP_PER_LEVEL,
   seasonOf: seasonOf, rewardFor: rewardFor,
-  ensure: ensure, info: info, addXp: addXp, onDepth: onDepth, claim: claim
+  ensure: ensure, info: info, addXp: addXp, onDepth: onDepth, claim: claim, mutationXp: mutationXp
 }

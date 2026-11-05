@@ -16,6 +16,7 @@ const ad = require('../core/ad')
 const endless = require('../core/endless')
 const festival = require('../core/festival')
 const mutation = require('../core/mutation')
+const season = require('../core/season')
 const checkin = require('../core/checkin')
 const ngplus = require('../core/ngplus')
 const task = require('../core/task')
@@ -452,7 +453,8 @@ HomeScene.prototype.drawMutBanner = function (ctx, v) {
   ctx.fillText('⚗ ' + this.mut.name, r.x + 50 * u, r.y + r.h / 2 - 6 * u)
   ctx.fillStyle = 'rgba(220,214,255,0.62)'
   ctx.font = Math.round(9.5 * u) + 'px sans-serif'
-  ctx.fillText(this.mut.desc, r.x + 50 * u, r.y + r.h / 2 + 9 * u)
+  const xpNote = season.mutationXp(this.mut)
+  ctx.fillText(this.mut.desc + (xpNote > 0 ? ' · 赛季XP+' + xpNote : ''), r.x + 50 * u, r.y + r.h / 2 + 9 * u)
   ctx.textBaseline = 'alphabetic'
   ctx.restore()
 }

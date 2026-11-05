@@ -14,6 +14,7 @@ const endless = require('../core/endless')
 const festival = require('../core/festival')
 const mutation = require('../core/mutation')
 const ngplus = require('../core/ngplus')
+const season = require('../core/season')
 const codex = require('../core/codex')
 const mercy = require('../core/mercy')
 const PlayCore = require('../core/play')
@@ -825,10 +826,12 @@ GameScene.prototype.onWin = function (st) {
         extra.push('连击 x' + combo + ' +' + comboBonus + '✦')
       }
     }
-    // 地宫异变补偿：挑战词缀日光尘加成（放在 addDust 之前，联动任务/赛季进度口径一致）
+    // 地宫异变补偿：挑战词缀日光尘加成（放在 addDust 之前，联动任务/赛季进度口径一致）；词缀日通关额外赛季 XP
     if (this.mut && this.mut.bonus > 1) {
       dustEarn = mutation.applyBonus(dustEarn, this.mut)
-      extra.push('⚗ ' + this.mut.name + ' ×' + this.mut.bonus)
+      const mutXp = season.mutationXp(this.mut)
+      extra.push('⚗ ' + this.mut.name + ' ×' + this.mut.bonus + (mutXp > 0 ? ' · 赛季XP+' + mutXp : ''))
+      if (mutXp > 0) season.addXp(mutXp)
     }
     // 轮回 NG+：光尘收益按周目加成（与异变互斥，本关不挂异变词缀）；计入周目进度
     if (this.ngCycle > 0) {
