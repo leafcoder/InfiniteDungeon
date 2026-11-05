@@ -5,6 +5,7 @@
  * - 技能（闪现/透视）、广告复活（每局一次，DEV 模拟页）、加载过渡页（M4）
  */
 const storage = require('../core/storage')
+const task = require('../core/task')
 const theme = require('../core/theme')
 const weekly = require('../core/weekly')
 const challenge = require('../core/challenge')
@@ -685,6 +686,7 @@ GameScene.prototype.onWin = function (st) {
         storage.saveStats(stt)
         extra.push('🗼 新纪录！最深 ' + cur + ' 层')
       }
+      task.onEndlessDepth(cur)
       const nxt = cur + 1
       const spec = endless.floorSpec(nxt)
       storage.addDust(dustEarn)
@@ -824,6 +826,7 @@ GameScene.prototype.onFail = function (reason) {
     })
     btns.push({ label: '再试一次', onTap: retry })
   } else {
+    const reviveCoupon = storage.getCoupons().revive || 0
     btns.push({
       label: canRevive ? '看广告复活' : '再试一次',
       primary: true,
@@ -832,6 +835,21 @@ GameScene.prototype.onFail = function (reason) {
         else retry()
       }
     })
+    if (reviveCoupon > 0) {
+      btns.push({
+        label: '复活券复活(' + reviveCoupon + ')',
+        onTap: function () {
+          if (storage.spendCoupon('revive')) {
+            self.reviveUsed = true
+            self.core.revive()
+            self.overlay = null
+            self.setHint('复活券生效！3 秒无敌，快走')
+          } else {
+            self.sm.toast('复活券不足')
+          }
+        }
+      })
+    }
   }
   btns.push({ label: '返回首页', onTap: function () { self.sm.switch('home') } })
   if (canRevive && !tutDeath) btns.push({ label: '放弃复活', onTap: retry })

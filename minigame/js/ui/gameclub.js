@@ -62,6 +62,11 @@ function show(rect) {
       }
     })
   } catch (e) { btn = null }
+  if (btn && typeof btn.onTap === 'function') {
+    btn.onTap(function () {
+      try { require('../core/task').onGameClubTap() } catch (e) {}
+    })
+  }
   return !!btn
 }
 

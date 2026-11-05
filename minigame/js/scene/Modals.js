@@ -15,6 +15,7 @@ const challenge = require('../core/challenge')
 const ad = require('../core/ad')
 const endless = require('../core/endless')
 const festival = require('../core/festival')
+const task = require('../core/task')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
 
@@ -217,17 +218,64 @@ function adUnlockHero(sm, h, reopen) {
   })
 }
 
-// 独立皮肤弹窗（首页顶栏「皮肤」钮入口，比补给站更醒目）
+// 外观行卡（头像框 / 称号）：装备 / 使用中(点按卸下) / 点按装备
+function buildCosmRows(sm, refresh) {
+  const active = storage.getActiveCosmetic()
+  const cos = storage.getCosmetics()
+  const mk = function (kind, id) {
+    const meta = task.cosmeticMeta(kind, id)
+    const using = (kind === 'frame' ? active.frame : active.title) === id
+    return {
+      ick: kind === 'frame' ? 'crown' : 'star',
+      icCol: meta.color,
+      title: meta.name,
+      sub: meta.desc || (kind === 'frame' ? '头像框' : '称号'),
+      tag: using ? '使用中 · 点按卸下' : '点按装备',
+      tagColor: using ? '#FFC15E' : '#6FE3D2',
+      dim: using,
+      onTap: function (m) {
+        if (using) {
+          if (kind === 'frame') storage.setActiveFrame(null); else storage.setActiveTitle(null)
+          sm.toast('已卸下' + (kind === 'frame' ? '头像框' : '称号'))
+          refresh(m); return
+        }
+        if (kind === 'frame') storage.setActiveFrame(id); else storage.setActiveTitle(id)
+        sm.toast('已装备：' + meta.name)
+        refresh(m)
+      }
+    }
+  }
+  return {
+    frames: cos.frames.map(function (id) { return mk('frame', id) }),
+    titles: cos.titles.map(function (id) { return mk('title', id) })
+  }
+}
+
+// 独立外观弹窗（首页顶栏「皮肤」钮入口）：主题皮肤 + 英雄 + 任务头像框/称号，统一穿戴入口
 function showSkin(sm, onClose) {
   const makeOpts = function () {
     const rows = buildSkinRows(sm, apply)
     rows.push({ header: '英雄' })
     buildHeroRows(sm, apply).forEach(function (r) { rows.push(r) })
+    const cos = storage.getCosmetics()
+    const cm = buildCosmRows(sm, apply)
+    if (cos.frames.length) {
+      rows.push({ header: '头像框' })
+      cm.frames.forEach(function (r) { rows.push(r) })
+    }
+    if (cos.titles.length) {
+      rows.push({ header: '称号' })
+      cm.titles.forEach(function (r) { rows.push(r) })
+    }
+    if (!cos.frames.length && !cos.titles.length) {
+      rows.push({ header: '头像框 / 称号' })
+      rows.push({ title: '完成任务获取', sub: '周常「本周塔尖挑战」与每周全勤可获奖品', dim: true })
+    }
     return {
-      title: '主题皮肤',
+      title: '外观',
       lines: [
         L('✦ 光尘 ' + storage.getDust() + ' · 轻点即可切换或解锁', { c: '#FFC15E', b: true, s: 13 }),
-        L('皮肤 ' + storage.getUnlockedSkins().length + '/' + theme.ORDER.length + ' · 英雄 ' + storage.getHeroCollected() + '/' + storage.HEROES.length, { c: '#6FE3D2', s: 11.5 })
+        L('皮肤 ' + storage.getUnlockedSkins().length + '/' + theme.ORDER.length + ' · 英雄 ' + storage.getHeroCollected() + '/' + storage.HEROES.length + ' · 外观 ' + (cos.frames.length + cos.titles.length), { c: '#6FE3D2', s: 11.5 })
       ],
       rows: rows,
       buttons: [{ label: '关闭' }],
@@ -236,7 +284,7 @@ function showSkin(sm, onClose) {
   }
   // m 为被点行所在弹窗：是本弹窗 → 就地刷新（无闪烁）；否则（广告确认页返回）→ 重建
   const apply = function (m) {
-    if (m && m.title === '主题皮肤') m.refresh(makeOpts())
+    if (m && m.title === '外观') m.refresh(makeOpts())
     else sm.sceneModal(new Modal(sm, makeOpts()))
   }
   return new Modal(sm, makeOpts())

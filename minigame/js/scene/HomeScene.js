@@ -15,6 +15,7 @@ const challenge = require('../core/challenge')
 const ad = require('../core/ad')
 const endless = require('../core/endless')
 const festival = require('../core/festival')
+const task = require('../core/task')
 const Icons = require('../ui/Icons')
 const club = require('../ui/gameclub')
 const Modals = require('./Modals')
@@ -44,7 +45,8 @@ const DOCK = [
   { key: 'rank', icon: '🏆', label: '排行' },
   { key: 'supply', icon: '🛒', label: '补给' },
   { key: 'survival', icon: '💀', label: '生存' },
-  { key: 'endless', icon: '🗼', label: '无尽' }
+  { key: 'endless', icon: '🗼', label: '无尽' },
+  { key: 'task', icon: '📋', label: '任务' }
 ]
 
 function HomeScene(sm) {
@@ -126,11 +128,17 @@ HomeScene.prototype.enter = function () {
   })
   this.styleGoBtn()
   this.dock = []
-  const dw = (W - 32 * u - (DOCK.length - 1) * 8 * u) / DOCK.length
+  // Dock 项自适应排布：触摸热区必须 ≥44px（88rpx 规范）；项多时收窄间距兜底
+  const padX = 14 * u
+  const nDock = DOCK.length
+  let gap = 8 * u
+  let dw = (W - padX * 2 - (nDock - 1) * gap) / nDock
+  if (dw < 44 * u) { gap = 6 * u; dw = (W - padX * 2 - (nDock - 1) * gap) / nDock }
+  if (dw < 44 * u) { gap = 4 * u; dw = (W - padX * 2 - (nDock - 1) * gap) / nDock }
   DOCK.forEach(function (d, i) {
     self.dock.push({
       key: d.key, icon: d.icon, label: d.label,
-      x: 16 * u + i * (dw + 8 * u), y: dockY, w: dw, h: 56 * u,
+      x: padX + i * (dw + gap), y: dockY, w: dw, h: 56 * u,
       pressT: 0
     })
   })
@@ -306,6 +314,8 @@ HomeScene.prototype.openEntry = function (key) {
     } else {
       this.sm.switch('game', { mode: 'survival', level: 30 })
     }
+  } else if (key === 'task') {
+    this.modal = require('./TaskPanel').build(this.sm, function () { self.modal = null })
   }
 }
 
@@ -600,11 +610,22 @@ HomeScene.prototype.openUnlock = function (lv) {
       { t: '今日剩余广告次数 ' + ad.freqState().remain + '/' + ad.DAILY_LIMIT, c: '#9AA0C8', s: 10.5 },
       { t: '✦ 花费 ' + UNLOCK_DUST_COST + ' 光尘直接解锁（通关/每日获取，不可充值）', c: '#9AA0C8', s: 11.5 }
     ],
-    buttons: [
-      { label: '看广告解锁', primary: true, onTap: watchAd },
-      { label: UNLOCK_DUST_COST + '✦ 解锁', onTap: buyDust },
-      { label: '取消' }
-    ],
+    buttons: (function () {
+      const arr = [
+        { label: '看广告解锁', primary: true, onTap: watchAd },
+        { label: UNLOCK_DUST_COST + '✦ 解锁', onTap: buyDust }
+      ]
+      const unlockCoupon = storage.getCoupons().unlock || 0
+      if (unlockCoupon > 0) arr.push({
+        label: '解锁券×' + unlockCoupon,
+        onTap: function () {
+          if (storage.spendCoupon('unlock')) succeed()
+          else self.showToast('解锁券不足')
+        }
+      })
+      arr.push({ label: '取消' })
+      return arr
+    })(),
     onClose: function () { self.modal = null }
   })
 }
@@ -890,6 +911,45 @@ HomeScene.prototype.drawHero = function (ctx, v) {
 
   ctx.textBaseline = 'alphabetic'
 
+  // 已装备外观（玩家名片）：头像框环 + 称号，置于卡内左侧空隙（与副标题/进度条错开，零重叠）
+  const ac = storage.getActiveCosmetic()
+  if (ac.frame || ac.title) {
+    const avX = h.x + 30 * u
+    const avY = h.y + 68 * u
+    const avR = 12 * u
+    // 头像底：取当前英雄主色（无则中性灰）
+    let avCol = '#C9C4E8'
+    try { const hp = storage.getHeroPal(); if (hp && hp.tunic) avCol = hp.tunic } catch (e) {}
+    ctx.beginPath()
+    ctx.arc(avX, avY, avR, 0, Math.PI * 2)
+    ctx.fillStyle = avCol
+    ctx.fill()
+    // 头像框环
+    if (ac.frame) {
+      const fm = task.cosmeticMeta('frame', ac.frame)
+      ctx.beginPath()
+      ctx.arc(avX, avY, avR + 3 * u, 0, Math.PI * 2)
+      ctx.lineWidth = 2.6 * u
+      ctx.strokeStyle = fm.color
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.arc(avX, avY, avR + 5.5 * u, 0, Math.PI * 2)
+      ctx.lineWidth = 1.4 * u
+      ctx.strokeStyle = this.hexA(fm.color, 0.4)
+      ctx.stroke()
+    }
+    // 称号（头像右侧一行）
+    if (ac.title) {
+      const tm = task.cosmeticMeta('title', ac.title)
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.fillStyle = tm.color
+      ctx.font = 'bold ' + Math.round(11 * u) + 'px sans-serif'
+      ctx.fillText('· ' + ac.title, avX + avR + 8 * u, avY + 1 * u)
+      ctx.textBaseline = 'alphabetic'
+    }
+  }
+
   // 左右箭头
   ctx.restore()
 }
@@ -1036,7 +1096,7 @@ HomeScene.prototype.drawGrid = function (ctx, v) {
 
 // 底部 Dock（矢量图标 + 柔光，去方盒卡片）
 const DOCK_ICON_COLOR = {
-  daily: '#6FE3D2', weekly: '#9B8CFF', rank: '#FFD86E', supply: '#FF9F6E', survival: '#FF7A92', endless: '#E36BFF'
+  daily: '#6FE3D2', weekly: '#9B8CFF', rank: '#FFD86E', supply: '#FF9F6E', survival: '#FF7A92', endless: '#E36BFF', task: '#FFC15E'
 }
 
 // 矢量图标绘制：以 (cx, cy) 为中心，s 为半尺寸（实现见 ui/Icons.js，与弹窗行卡共用）
@@ -1078,6 +1138,13 @@ HomeScene.prototype.drawDock = function (ctx, v) {
     ctx.fillStyle = d.key === 'survival' ? '#FFB9C6' : v['--text']
     ctx.font = Math.round(10 * u) + 'px sans-serif'
     ctx.fillText(d.label, cx, d.y + 46 * u)
+    // 任务入口红点：存在可领任务时提示
+    if (d.key === 'task' && task.hasClaimable()) {
+      ctx.fillStyle = '#FF4D5E'
+      ctx.beginPath()
+      ctx.arc(d.x + d.w - 8 * u, d.y + 7 * u, 5 * u, 0, Math.PI * 2)
+      ctx.fill()
+    }
     ctx.restore()
   }
   ctx.restore()

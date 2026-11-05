@@ -514,6 +514,16 @@ function drawIcon(ctx, key, cx, cy, s, col) {
       ctx.fill()
       break
     }
+    case 'task': { // 剪贴板（任务）
+      roundRect(ctx, -s * 0.4, -s * 0.46, s * 0.8, s * 0.92, s * 0.1)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(-s * 0.4, -s * 0.18)
+      ctx.lineTo(s * 0.4, -s * 0.18)
+      ctx.stroke()
+      ctx.fillRect(-s * 0.06, -s * 0.46, s * 0.12, s * 0.16)
+      break
+    }
   }
   ctx.restore()
 }

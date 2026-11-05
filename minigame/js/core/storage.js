@@ -50,11 +50,22 @@ function getDust() {
   }
 }
 
+// 任务模块（动态 require 避免与 core/task 的循环依赖：task.js 顶部 require 本模块）
+let _taskMod = null
+function taskMod() {
+  if (_taskMod === null) {
+    try { _taskMod = require('./task') } catch (e) { _taskMod = false }
+  }
+  return _taskMod || null
+}
+
 function addDust(n) {
   const v = Math.max(0, getDust() + n);
   try {
     wx.setStorageSync(DUST_KEY, v);
   } catch (e) {}
+  const tm = taskMod();
+  if (tm && tm.onDust) { try { tm.onDust(n) } catch (e) {} }
   return v;
 }
 
@@ -461,6 +472,8 @@ function completeLevel(level, rec) {
   if (better) p.completed[level] = rec;
   p.unlocked = Math.max(p.unlocked, Math.min(level + 1, TOTAL));
   saveProgress(p);
+  const tm = taskMod();
+  if (tm && tm.onClear) { try { tm.onClear() } catch (e) {} }
   return { progress: p, isNew: better };
 }
 
@@ -476,7 +489,8 @@ function resetProgress() {
     'maze_theme_v1', 'maze_hero_v1', 'maze_heroes_v1', 'maze_talent_v1',
     'maze_stats_v1', 'maze_ach_v1', 'maze_codex_v1', 'maze_codehist_v1',
     'maze_codebest_v1', 'maze_combo_v1', 'maze_ghost_v1', 'maze_flags_v1',
-    'maze_trial_v1', 'maze_skills_v1'
+    'maze_trial_v1', 'maze_skills_v1',
+    'maze_task_v1', 'maze_coupon_v1', 'maze_shard_v1', 'maze_cosmetics_v1'
   ];
   for (let i = 0; i < keys.length; i++) {
     try { wx.removeStorageSync(keys[i]) } catch (e) {}
@@ -495,6 +509,79 @@ function incCombo() {
 }
 function resetCombo() {
   try { wx.setStorageSync(COMBO_KEY, 0) } catch (e) {}
+}
+
+/* ============ 任务奖励：券 / 碎片 / 外观（与广告频次隔离） ============ */
+const COUPON_KEY = 'maze_coupon_v1'
+const SHARD_KEY = 'maze_shard_v1'
+const COSM_KEY = 'maze_cosmetics_v1'
+// 免费券：等价广告福利，但不计入 ad.freqState（不突破微信每日≤3次）
+function getCoupons() {
+  try {
+    const c = wx.getStorageSync(COUPON_KEY)
+    if (c && typeof c === 'object') return { revive: c.revive || 0, unlock: c.unlock || 0 }
+  } catch (e) {}
+  return { revive: 0, unlock: 0 }
+}
+function addCoupon(kind, n) {
+  const c = getCoupons()
+  c[kind] = (c[kind] || 0) + n
+  try { wx.setStorageSync(COUPON_KEY, c) } catch (e) {}
+  return c[kind]
+}
+function spendCoupon(kind) {
+  const c = getCoupons()
+  if ((c[kind] || 0) <= 0) return false
+  c[kind] -= 1
+  try { wx.setStorageSync(COUPON_KEY, c) } catch (e) {}
+  return true
+}
+// 皮肤碎片（收集向，兑换入口后续批次）
+function getShards() {
+  try { return wx.getStorageSync(SHARD_KEY) || 0 } catch (e) { return 0 }
+}
+function addShard(n) {
+  const v = getShards() + n
+  try { wx.setStorageSync(SHARD_KEY, v) } catch (e) {}
+  return v
+}
+// 外观收藏：头像框 / 称号（仅展示，不附数值）
+function getCosmetics() {
+  try {
+    const c = wx.getStorageSync(COSM_KEY)
+    if (c && typeof c === 'object') return {
+      frames: c.frames || [], titles: c.titles || [],
+      activeFrame: c.activeFrame || null, activeTitle: c.activeTitle || null
+    }
+  } catch (e) {}
+  return { frames: [], titles: [], activeFrame: null, activeTitle: null }
+}
+function unlockCosmetic(kind, id) {
+  const c = getCosmetics()
+  const arr = c[kind] || (c[kind] = [])
+  if (arr.indexOf(id) === -1) arr.push(id)
+  try { wx.setStorageSync(COSM_KEY, c) } catch (e) {}
+  return c
+}
+// 当前穿戴的头像框 / 称号（无则 null）—— 与英雄皮肤 getHero/setHero 同构，纯展示不附数值
+function getActiveCosmetic() {
+  const c = getCosmetics()
+  return { frame: c.activeFrame || null, title: c.activeTitle || null }
+}
+// 装备头像框：必须是已解锁的（或传 null 卸下）；未拥有返回 false
+function setActiveFrame(id) {
+  const c = getCosmetics()
+  if (id && c.frames.indexOf(id) === -1) return false
+  c.activeFrame = id || null
+  try { wx.setStorageSync(COSM_KEY, c) } catch (e) {}
+  return true
+}
+function setActiveTitle(id) {
+  const c = getCosmetics()
+  if (id && c.titles.indexOf(id) === -1) return false
+  c.activeTitle = id || null
+  try { wx.setStorageSync(COSM_KEY, c) } catch (e) {}
+  return true
 }
 
 /* ============ 设置（P4 无障碍 / 音效） ============ */
@@ -643,6 +730,8 @@ function completeDaily(date, rec) {
   if (streak === 3) bonus = 15;
   else if (streak > 3 && streak % 7 === 0) bonus = 30;
   if (bonus > 0) addDust(bonus);
+  const tm = taskMod();
+  if (tm && tm.onClear) { try { tm.onClear() } catch (e) {} }
   return { better: better, streak: streak, bonus: bonus, newAch: newAch };
 }
 
@@ -1060,6 +1149,16 @@ module.exports = {
   getCombo: getCombo,
   incCombo: incCombo,
   resetCombo: resetCombo,
+  getCoupons: getCoupons,
+  addCoupon: addCoupon,
+  spendCoupon: spendCoupon,
+  getShards: getShards,
+  addShard: addShard,
+  getCosmetics: getCosmetics,
+  unlockCosmetic: unlockCosmetic,
+  getActiveCosmetic: getActiveCosmetic,
+  setActiveFrame: setActiveFrame,
+  setActiveTitle: setActiveTitle,
   getStats: getStats,
   saveStats: saveStats,
   achList: achList,
