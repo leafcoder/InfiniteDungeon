@@ -159,24 +159,29 @@ HomeScene.prototype.enter = function () {
   // Hero 卡：顶栏第二行（胶囊与图标钮同线）下沿再留白
   const clusterBottom = this.pillRect.y + this.pillRect.h
   this.hero = { x: 16 * u, y: clusterBottom + 14 * u, w: W - 32 * u, h: 140 * u }
+  // 赛季征程横幅：Hero 卡正下方第一横幅，常驻展示赛季等级 / 进度 / 剩余天数（可点开领奖）
+  this.seasonInfo = season.info()
+  this.seasonRect = { x: 16 * u, y: this.hero.y + this.hero.h + 8 * u, w: W - 32 * u, h: 40 * u }
+  this.seasonBottom = this.seasonRect.y + this.seasonRect.h + 8 * u
+  // 活动横幅占位：圆点指示器与关卡网格的纵向锚点随之下移（锚定赛季横幅下沿）
+  this.festBottom = this.seasonBottom
   // 节日限时活动入口（N12）：Hero 卡正下方的全宽活动横幅，活动结束自动消失
   this.fest = festival.getActive()
   this.festRect = this.fest
-    ? { x: 16 * u, y: this.hero.y + this.hero.h + 8 * u, w: W - 32 * u, h: 36 * u }
+    ? { x: 16 * u, y: this.seasonBottom, w: W - 32 * u, h: 36 * u }
     : null
-  // 活动横幅占位：圆点指示器与关卡网格的纵向锚点随之下移
-  this.festBottom = this.festRect ? this.festRect.y + this.festRect.h + 8 * u : this.hero.y + this.hero.h + 10 * u
+  this.festBottom = this.festRect ? this.festRect.y + this.festRect.h + 8 * u : this.seasonBottom
   // 地宫异变横幅：与节日横幅共用 Hero 卡正下方槽位（节日优先，避免纵向挤压网格）；
   // 仅挑战词缀日显示（宁静日不占版面），纯展示不可点
   this.mut = mutation.today()
   this.mutRect = (!this.fest && this.mut && this.mut.mods.length > 0)
-    ? { x: 16 * u, y: this.hero.y + this.hero.h + 8 * u, w: W - 32 * u, h: 36 * u }
+    ? { x: 16 * u, y: this.festBottom, w: W - 32 * u, h: 36 * u }
     : null
   if (this.mutRect) this.festBottom = this.mutRect.y + this.mutRect.h + 8 * u
   // 每日签到横幅：与节日/异变共用槽位（节日 > 异变 > 签到），仅未签到时显示，可点
   this.chk = checkin.info()
   this.chkRect = (!this.fest && !(this.mut && this.mut.mods.length > 0) && this.chk && !this.chk.signed)
-    ? { x: 16 * u, y: this.hero.y + this.hero.h + 8 * u, w: W - 32 * u, h: 36 * u }
+    ? { x: 16 * u, y: this.festBottom, w: W - 32 * u, h: 36 * u }
     : null
   if (this.chkRect) this.festBottom = this.chkRect.y + this.chkRect.h + 8 * u
   this.heroSc = new ScrollView({ x: this.hero.x, y: this.hero.y, w: this.hero.w, h: this.hero.h, horizontal: true })
@@ -421,6 +426,69 @@ HomeScene.prototype.drawFestBanner = function (ctx, v) {
 }
 
 // 地宫异变横幅：今日词缀 + 光尘补偿提示（纯展示，不可点；节日活动期间让位隐藏）
+// 赛季征程横幅：常驻展示赛季等级 / 进度 / 剩余天数，可点开领奖
+HomeScene.prototype.drawSeasonBanner = function (ctx, v) {
+  if (!this.seasonRect || !this.seasonInfo) return
+  const u = this.u
+  const e = this.ent(2)
+  if (e <= 0) return
+  const r = this.seasonRect
+  const s = this.seasonInfo
+  ctx.save()
+  ctx.globalAlpha = e
+  ctx.translate(0, (1 - e) * 10)
+  roundRect(ctx, r.x, r.y, r.w, r.h, 18 * u)
+  ctx.fillStyle = 'rgba(255,193,94,0.12)'
+  ctx.fill()
+  ctx.lineWidth = 1
+  ctx.strokeStyle = 'rgba(255,193,94,0.55)'
+  ctx.stroke()
+  // 左侧圆徽：星标，赛季主色
+  const cx = r.x + 26 * u
+  const cy = r.y + r.h / 2
+  ctx.beginPath()
+  ctx.arc(cx, cy, 15 * u, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(255,193,94,0.18)'
+  ctx.fill()
+  Icons.drawIcon(ctx, 'star', cx, cy + 1, 16 * u, '#FFC15E')
+  // 标题行：第 N 赛季 · Lv.X
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#FFC15E'
+  ctx.font = 'bold ' + Math.round(14 * u) + 'px sans-serif'
+  ctx.fillText('第 ' + s.season + ' 赛季 · Lv.' + s.level, r.x + 50 * u, r.y + 13 * u)
+  // 进度条（into / perLevel）+ 剩余天数
+  const barX = r.x + 50 * u
+  const barY = r.y + 24 * u
+  const barW = r.w - 50 * u - 96 * u
+  const pct = Math.max(0, Math.min(1, (s.into || 0) / (s.perLevel || 1)))
+  roundRect(ctx, barX, barY, barW, 5 * u, 2.5 * u)
+  ctx.fillStyle = 'rgba(255,255,255,0.14)'
+  ctx.fill()
+  roundRect(ctx, barX, barY, Math.max(5 * u, barW * pct), 5 * u, 2.5 * u)
+  ctx.fillStyle = '#FFC15E'
+  ctx.fill()
+  ctx.fillStyle = 'rgba(255,236,194,0.7)'
+  ctx.font = Math.round(9.5 * u) + 'px sans-serif'
+  ctx.fillText(s.into + '/' + s.perLevel + ' · 剩 ' + s.left + ' 天', barX, r.y + 34 * u)
+  // 右侧：可领奖励数（高亮按钮感）
+  const claimN = (s.claimable || []).length
+  const tagX = r.x + r.w - 14 * u
+  ctx.textAlign = 'right'
+  if (claimN > 0) {
+    ctx.fillStyle = '#6EE7A0'
+    ctx.font = 'bold ' + Math.round(12 * u) + 'px sans-serif'
+    ctx.fillText('可领 ' + claimN + ' ›', tagX, cy)
+  } else {
+    ctx.fillStyle = 'rgba(255,236,194,0.55)'
+    ctx.font = Math.round(10.5 * u) + 'px sans-serif'
+    ctx.fillText('查看 ›', tagX, cy)
+  }
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  ctx.restore()
+}
+
 HomeScene.prototype.drawMutBanner = function (ctx, v) {
   if (!this.mutRect || !this.mut) return
   const u = this.u
@@ -525,6 +593,16 @@ HomeScene.prototype.openCheckin = function () {
     self.chkRect = (self.chk && !self.chk.signed && !self.fest && !(self.mut && self.mut.mods.length > 0))
       ? self.chkRect : null
     self.dustDisp = storage.getDust() // 签到所得直接就位（不重播入场动画）
+    self.dirty = true
+  })
+}
+
+// 赛季征程入口：打开赛季领奖面板
+HomeScene.prototype.openSeason = function () {
+  const self = this
+  this.modal = Modals.showSeason(this.sm, function () {
+    self.modal = null
+    self.seasonInfo = season.info() // 领取后刷新横幅等级 / 可领数
     self.dirty = true
   })
 }
@@ -660,12 +738,22 @@ HomeScene.prototype.onTouchEnd = function (tx, ty) {
   if (this.touchDown && this.isTap(tx, ty) && this.inChkRect(tx, ty)) {
     this.openCheckin()
   }
+  // 赛季征程横幅（可点开领奖）
+  if (this.touchDown && this.isTap(tx, ty) && this.inSeasonRect(tx, ty)) {
+    this.openSeason()
+  }
   this.touchDown = null
 }
 
 HomeScene.prototype.inHero = function (tx, ty) {
   const h = this.hero
   return tx >= h.x && tx <= h.x + h.w && ty >= h.y && ty <= h.y + h.h
+}
+
+HomeScene.prototype.inSeasonRect = function (tx, ty) {
+  const r = this.seasonRect
+  if (!r) return false
+  return tx >= r.x && tx <= r.x + r.w && ty >= r.y && ty <= r.y + r.h
 }
 
 HomeScene.prototype.isTap = function (tx, ty) {
@@ -842,6 +930,7 @@ HomeScene.prototype.draw = function (ctx) {
   this.bg.draw(ctx, W, H, v, 1 / 60, 0)
   this.drawTopBar(ctx, v)
   this.drawHero(ctx, v)
+  this.drawSeasonBanner(ctx, v)
   this.drawFestBanner(ctx, v)
   this.drawMutBanner(ctx, v)
   this.drawChkBanner(ctx, v)

@@ -53,8 +53,8 @@ console.log('--- 反馈1：活动横幅位置 ---');
   festival.getActive = real;
   mutation.today = mutReal;
   checkin.info = chkReal;
-  T('空档期圆点行回到 Hero 卡下方', Math.abs(hs2.dotsRect().y - (hs2.hero.y + hs2.hero.h + 10 * hs2.u)) < 0.01);
-  T('空档期网格 y 回到原位', Math.abs(hs2.gz.y - (hs2.hero.y + hs2.hero.h + 28 * hs2.u)) < 0.01);
+  T('空档期圆点行在常驻赛季横幅下方', hs2.dotsRect().y >= hs2.seasonRect.y + hs2.seasonRect.h);
+  T('空档期网格在圆点行下方不重叠', hs2.gz.y >= hs2.dotsRect().y + 8);
 }
 
 console.log('--- 反馈2：英雄行文案不超行卡 ---');

@@ -19,6 +19,7 @@ const task = require('../core/task')
 const checkin = require('../core/checkin')
 const ngplus = require('../core/ngplus')
 const codex = require('../core/codex')
+const season = require('../core/season')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
 const TaskPanel = require('../scene/TaskPanel')
@@ -659,6 +660,64 @@ function showAch(sm, onClose) {
   })
 }
 
+// 赛季奖励描述：把 rewardFor 的键值对转成可读文本
+function seasonRewardDesc(rw) {
+  if (!rw || typeof rw !== 'object') return ''
+  const parts = []
+  if (rw.frame) parts.push('头像框「' + rw.frame + '」')
+  if (rw.title) parts.push('称号「' + rw.title + '」')
+  if (rw.shard) parts.push(rw.shard + ' 碎片')
+  if (rw.dust) parts.push(rw.dust + ' 光尘')
+  if (rw.revive) parts.push(rw.revive + ' 复活')
+  if (rw.unlock) parts.push(rw.unlock + ' 解锁券')
+  return parts.join(' · ')
+}
+
+// 赛季征程面板：等级 / 进度 / 剩余天数 + 可领奖励一键领取
+function showSeason(sm, onClose) {
+  const info = season.info()
+  function buildRows() {
+    const s = season.info()
+    const rows = []
+    s.claimable.forEach(function (lv) {
+      const rw = s.rewardFor(lv)
+      rows.push({
+        ick: 'star',
+        icCol: '#FFC15E',
+        title: 'Lv.' + lv + ' 赛季奖励',
+        sub: seasonRewardDesc(rw),
+        tag: '领取',
+        tagColor: '#6EE7A0',
+        onTap: function (m) {
+          const r = season.claim(lv)
+          if (r.ok) {
+            sm.toast('已领取 Lv.' + lv + ' 奖励')
+            if (m && m.rows) m.rows = buildRows() // 刷新列表
+          } else {
+            sm.toast('领取失败：' + (r.reason || '未知'))
+          }
+        }
+      })
+    })
+    if (rows.length === 0) {
+      rows.push({ header: '暂无可领奖励 · 通关 / 完成挑战获取赛季经验' })
+    }
+    return rows
+  }
+  const rows = buildRows()
+  const m = new Modal(sm, {
+    title: '赛季征程 · 第 ' + info.season + ' 赛季',
+    lines: [
+      L('Lv.' + info.level + ' / ' + info.maxLevel + ' · 进度 ' + info.into + '/' + info.perLevel + ' · 剩余 ' + info.left + ' 天', { b: true, c: '#FFC15E', s: 13.5 }),
+      L('赛季结束 XP 与未领奖励将重置，限时稀缺请尽早领取', { c: '#9AA0C8', s: 11 })
+    ],
+    rows: rows,
+    buttons: [{ label: '关闭' }],
+    onClose: onClose
+  })
+  return m
+}
+
 /* ---------- 排行榜 ---------- */
 
 function showRank(sm, onClose) {
@@ -1275,6 +1334,7 @@ module.exports = {
   showSettings: showSettings,
   showAch: showAch,
   showRank: showRank,
+  showSeason: showSeason,
   showDaily: showDaily,
   showCheckin: showCheckin,
   showCodex: showCodex,
