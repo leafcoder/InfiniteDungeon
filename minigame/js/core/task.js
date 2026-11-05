@@ -198,10 +198,33 @@ function claim(id) {
 // 接后端上报时，在 storage.incTaskTrack 内部转发即可，业务侧无需改动
 function track(ev) { return storage.incTaskTrack(ev) }
 
+// 碎片缺口计算（每日全勤 +FULL_DAILY.shard）：用于兑换引导页展示「还差 N / 约 M 天」
+function shardNeed(cost) {
+  const have = storage.getShards()
+  const need = Math.max(0, cost - have)
+  const perDay = FULL_DAILY.shard || 1
+  const days = need <= 0 ? 0 : Math.ceil(need / perDay)
+  return { have: have, need: need, days: days }
+}
+
+// 埋点汇总（本机漏斗）：把裸计数转成可读指标，供设置页展示 / 接后端上报
+// clickRate = 曝光→点击；claimRate = 完成→领取（衡量奖励吸引力）
+function trackSummary() {
+  const t = storage.getTaskTrack()
+  const pct = function (a, b) { return b > 0 ? Math.round((a / b) * 100) : 0 }
+  return {
+    expose: t.expose, click: t.click, complete: t.complete, claim: t.claim,
+    clickRate: pct(t.click, t.expose),
+    claimRate: pct(t.claim, t.complete),
+    total: t.expose + t.click + t.complete + t.claim
+  }
+}
+
 module.exports = {
   TASKS: TASKS, FULL_DAILY: FULL_DAILY, FULL_WEEKLY: FULL_WEEKLY, COSMETIC_META: COSMETIC_META,
   weekKey: weekKey, ensure: ensure,
   onDust: onDust, onClear: onClear, onGameClubTap: onGameClubTap, onEndlessDepth: onEndlessDepth,
   getState: getState, hasClaimable: hasClaimable, claim: claim, track: track,
+  shardNeed: shardNeed, trackSummary: trackSummary,
   cosmeticMeta: cosmeticMeta
 }

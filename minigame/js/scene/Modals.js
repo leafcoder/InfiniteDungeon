@@ -18,6 +18,7 @@ const festival = require('../core/festival')
 const task = require('../core/task')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
+const TaskPanel = require('../scene/TaskPanel')
 
 const UPG_FX = { cloak: '隐身衣', freeze: '冰冻星', dash: '加速鞋' } // 可升级道具（与 storage.getUpgrades 同源）
 // 强化道具 → 矢量图标映射（此前直接 ick: k，Icons.js 无 'freeze'/'dash'，图标空白）
@@ -75,7 +76,12 @@ function buildSkinRows(sm, refresh) {
             refresh(m)
             return
           }
-          // 光尘足额：直接解锁并穿上
+          // 该皮肤支持碎片兑换但碎片不足 → 打开引导页（展示缺口+天数，并提供光尘/广告即时解锁）
+          if (shardCost > 0) {
+            sm.sceneModal(shardGuide(sm, k, t, shardCost, function () { refresh(null) }))
+            return
+          }
+          // 非碎片皮肤：原光尘足额直接解锁
           if (storage.spendDust(t.price)) {
             storage.unlockSkin(k)
             storage.setTheme(k)
@@ -130,6 +136,44 @@ function adUnlockSkin(sm, k, t, reopen) {
       },
       { label: '取消', onTap: reopen }
     ],
+    onClose: reopen
+  })
+}
+
+// 碎片不足引导页：明确「还差多少 / 每日全勤 +3 / 预计天数」，并给出即时解锁替代路径
+function shardGuide(sm, k, t, cost, reopen) {
+  const info = task.shardNeed(cost)
+  const buttons = []
+  const canDust = storage.getDust() >= t.price
+  const onDust = function () {
+    if (!storage.spendDust(t.price)) { sm.toast('光尘不足'); reopen(); return }
+    storage.unlockSkin(k)
+    storage.setTheme(k)
+    sm.toast('光尘解锁：' + t.label)
+    reopen()
+  }
+  if (canDust) buttons.push({ label: '✦ 光尘解锁（' + t.price + '）', primary: true, onTap: onDust })
+  buttons.push({
+    label: '▶ 看广告解锁', primary: !canDust,
+    onTap: function () { sm.sceneModal(adUnlockSkin(sm, k, t, reopen)) }
+  })
+  buttons.push({
+    label: '去做每日任务（+3碎片/天）',
+    onTap: function () {
+      reopen() // 先关引导，回到外观页
+      sm.sceneModal(TaskPanel.build(sm, function () { reopen() })) // 任务面板关闭后重新打开外观页
+    }
+  })
+  buttons.push({ label: '取消', onTap: reopen })
+  return new Modal(sm, {
+    title: '碎片不足 · 兑换「' + t.label + '」',
+    lines: [
+      L('还差 ' + info.need + ' 碎片（持有 ' + info.have + '/' + cost + '）。', { s: 13, b: true, c: '#FFC15E' }),
+      L('每日任务全部完成可领 ' + task.FULL_DAILY.shard + ' 碎片，预计还需约 ' + info.days + ' 天集齐。', { s: 11.5, c: '#9AA0C8' }),
+      L(''),
+      L('也可立刻用光尘或看广告解锁，立即穿上。', { s: 11, c: '#9AA0C8' })
+    ],
+    buttons: buttons,
     onClose: reopen
   })
 }
@@ -349,6 +393,17 @@ function showSettings(sm, onClose) {
         }
       }
     ]
+    // 任务漏斗（本机埋点）：纯展示，供运营/自查；无数据时整行不显示，零干扰
+    const ts = task.trackSummary()
+    if (ts.total > 0) {
+      rows.push({
+        ick: 'book', icCol: '#9B8CFF',
+        title: '任务数据（本机）',
+        sub: '曝光 ' + ts.expose + ' · 完成 ' + ts.complete + ' · 领取 ' + ts.claim,
+        tag: '领取率 ' + ts.claimRate + '%', tagColor: '#FFC15E',
+        dim: true
+      })
+    }
     return {
       title: '设置',
       lines: [L('调整游戏体验', { c: '#FFC15E', b: true, s: 13 })],
@@ -1063,6 +1118,7 @@ module.exports = {
   showFestival: showFestival,
   showEndless: showEndless,
   showSkin: showSkin,
+  shardGuide: shardGuide,
   showSettings: showSettings,
   showAch: showAch,
   showRank: showRank,
