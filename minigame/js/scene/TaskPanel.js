@@ -43,6 +43,8 @@ function build(sm, onClose, isRefresh) {
         const msgs = []
         r.got.forEach(function (g) { msgs.push(rewardText(g)) })
         r.fullBonus.forEach(function (g) { msgs.push('全勤+' + rewardText(g)) })
+        const sb = r.streakBonus || []
+        sb.forEach(function (g) { msgs.push('连勤+' + rewardText(g)) })
         if (msgs.length) sm.toast('领取：' + msgs.join('，'))
         if (m && m.close) m.close()
         sm.sceneModal(build(sm, onClose, true))
@@ -61,6 +63,16 @@ function build(sm, onClose, isRefresh) {
     })
   }
 
+  // 连续全勤进度：跨日累积目标，给玩家「明天还要回来续上」的理由
+  const si = task.streakInfo()
+  rows.push({
+    icon: 'crown',
+    title: '🔥 连续全勤 ' + si.streak + ' 天',
+    sub: si.next ? ('再 ' + si.next.left + ' 天得 ' + si.next.label) : '全部里程碑已达成 · 保持纪录',
+    tag: si.next ? '进行中' : '✓',
+    tagColor: si.next ? '#FFC15E' : '#6FE3D2',
+    dim: !si.next
+  })
   rows.push({ icon: 'daily', title: '【每日任务】', sub: '0 点刷新 · 完成领奖', tag: '', tagColor: '#FFC15E', dim: true })
   st.daily.forEach(function (t) { pushTask(t, '') })
   rows.push({ icon: 'weekly', title: '【每周任务】', sub: '周一 0 点刷新', tag: '', tagColor: '#9B8CFF', dim: true })

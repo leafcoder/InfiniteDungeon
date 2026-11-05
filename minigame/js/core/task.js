@@ -26,14 +26,24 @@ const TASKS = {
 const FULL_DAILY = { shard: 3 }      // 每日 3/3 → 皮肤碎片 ×3
 const FULL_WEEKLY = { title: '地宫常驻' } // 每周 2/2 → 限定称号
 
+// 连续全勤里程碑：把「单日行为」转成「跨日承诺」，是日活留存的主钩子
+// 只发软货币/外观，绝不触碰广告次数（合规红线）
+const FULL_STREAK = [
+  { day: 3, reward: { shard: 5 }, label: '碎片 ×5' },
+  { day: 7, reward: { frame: '不熄之志' }, label: '头像框·不熄之志' },
+  { day: 14, reward: { title: '地宫守望' }, label: '称号·地宫守望' }
+]
+
 // 外观元数据：任务发放的头像框/称号的展示名与配色（纯展示，不附数值）
 // 未知 id 回退到 id 本身（避免后续新来源的外观显示为空白）
 const COSMETIC_META = {
   frame: {
-    '登塔者': { desc: '无尽塔登顶者的荣光', color: '#E36BFF' }
+    '登塔者': { desc: '无尽塔登顶者的荣光', color: '#E36BFF' },
+    '不熄之志': { desc: '连续 7 天全勤的证明', color: '#FF9E4A' }
   },
   title: {
-    '地宫常驻': { desc: '每周任务全勤限定称号', color: '#FFC15E' }
+    '地宫常驻': { desc: '每周任务全勤限定称号', color: '#FFC15E' },
+    '地宫守望': { desc: '连续 14 天全勤限定称号', color: '#6FE3D2' }
   }
 }
 function cosmeticMeta(kind, id) {
@@ -56,6 +66,18 @@ function weekKey() {
   return y + '-W' + (wk < 10 ? '0' : '') + wk
 }
 
+// 前一天 key（纯字符串日期运算，不依赖真实时钟 → 可注入 dailyKey 做跨天回归）
+// 断签判定与连续天数累计共用，避免 yesterdayKey() 基于 Date.now() 带来的夏令时/边界误差
+function prevDay(key) {
+  const p = String(key || '').split('-')
+  if (p.length !== 3) return ''
+  const d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]) - 1)
+  if (isNaN(d.getTime())) return ''
+  const m = ('0' + (d.getMonth() + 1)).slice(-2)
+  const day = ('0' + d.getDate()).slice(-2)
+  return d.getFullYear() + '-' + m + '-' + day
+}
+
 // ---- 存储 ----
 function load() {
   try { return wx.getStorageSync(TASK_KEY) || null } catch (e) { return null }
@@ -68,11 +90,13 @@ function freshState() {
     date: storage.dailyKey(),
     week: weekKey(),
     daily: TASKS.daily.map(function (t) { return { id: t.id, progress: 0, claimed: false } }),
-    weekly: TASKS.weekly.map(function (t) { return { id: t.id, progress: 0, claimed: false } })
+    weekly: TASKS.weekly.map(function (t) { return { id: t.id, progress: 0, claimed: false } }),
+    fullStreak: 0, lastFullDate: '', streakAwarded: []
   }
 }
 
 // 幂等刷新：进入任何任务读取前调用；跨天重置 daily，跨周重置 weekly
+// 连续全勤字段为后续版本新增，旧存档缺字段时在此补齐（不丢原有进度）
 function ensure() {
   let s = load()
   const dk = storage.dailyKey(), wk = weekKey()
@@ -80,7 +104,12 @@ function ensure() {
     s = freshState(); save(s); return s
   }
   let changed = false
+  if (typeof s.fullStreak !== 'number') { s.fullStreak = 0; changed = true }
+  if (typeof s.lastFullDate !== 'string') { s.lastFullDate = ''; changed = true }
+  if (!Array.isArray(s.streakAwarded)) { s.streakAwarded = []; changed = true }
   if (s.date !== dk) {
+    // 断签判定：上次全勤既不是今天也不是昨天 → 连续清零；否则保留（今天仍可续上）
+    if (s.lastFullDate !== dk && s.lastFullDate !== prevDay(dk)) s.fullStreak = 0
     s.date = dk
     s.daily = TASKS.daily.map(function (t) { return { id: t.id, progress: 0, claimed: false } })
     changed = true
@@ -92,6 +121,18 @@ function ensure() {
   }
   if (changed) save(s)
   return s
+}
+
+// 连续全勤摘要：面板展示「连了几天 / 下一个里程碑还差几天」
+function streakInfo() {
+  const s = ensure()
+  const cur = s.fullStreak || 0
+  let next = null
+  for (let i = 0; i < FULL_STREAK.length; i++) {
+    const m = FULL_STREAK[i]
+    if (cur < m.day) { next = { day: m.day, left: m.day - cur, reward: m.reward, label: m.label }; break }
+  }
+  return { streak: cur, next: next, awarded: (s.streakAwarded || []).slice(), allDone: !next }
 }
 
 // ---- 进度写入（钩子）----
@@ -143,7 +184,8 @@ function getState() {
     daily: s.daily.map(function (t) { return wrap('daily', t) }),
     weekly: s.weekly.map(function (t) { return wrap('weekly', t) }),
     dailyFull: s.daily.length > 0 && s.daily.every(function (t) { return t.claimed }),
-    weeklyFull: s.weekly.length > 0 && s.weekly.every(function (t) { return t.claimed })
+    weeklyFull: s.weekly.length > 0 && s.weekly.every(function (t) { return t.claimed }),
+    fullStreak: s.fullStreak || 0
   }
 }
 function hasClaimable() {
@@ -191,7 +233,27 @@ function claim(id) {
   if (st.weeklyFull) {
     const fr = applyReward(FULL_WEEKLY); fullBonus.push.apply(fullBonus, fr)
   }
-  return { ok: true, got: got, fullBonus: fullBonus }
+  // 连续全勤：只在「当天首次达成全勤」时累计，重复领取不叠加、不重复发里程碑奖
+  // 必须重新 ensure() 取最新 state：上面 applyReward 的 addDust 会触发 onDust → 写 W2 进度，
+  // 若直接用旧引用 s 回写会把那部分进度覆盖掉
+  const streakBonus = []
+  const s2 = ensure()
+  const dk = storage.dailyKey()
+  if (st.dailyFull && s2.lastFullDate !== dk) {
+    s2.fullStreak = (s2.lastFullDate === prevDay(dk)) ? (s2.fullStreak || 0) + 1 : 1
+    s2.lastFullDate = dk
+    save(s2)
+    // 里程碑奖励只用 shard/frame/title（不发 dust），避免再次触发 onDust 造成状态回写穿插
+    for (let i = 0; i < FULL_STREAK.length; i++) {
+      const m = FULL_STREAK[i]
+      if (s2.fullStreak >= m.day && s2.streakAwarded.indexOf(m.day) === -1) {
+        s2.streakAwarded.push(m.day)
+        applyReward(m.reward).forEach(function (g) { streakBonus.push(g) })
+      }
+    }
+    if (streakBonus.length) save(s2)
+  }
+  return { ok: true, got: got, fullBonus: fullBonus, streakBonus: streakBonus }
 }
 
 // 埋点统一入口（曝光 / 点击 由面板调用；完成 / 领取 由任务内自动触发）
@@ -220,6 +282,12 @@ function trackSummary() {
   }
 }
 
+// 结算达成判定：本关是否让某个日常首次达标（done 增加）→ 触发即时正反馈
+// 抽成纯函数便于回归；只比较 done，避免把「领取」误判为「达成」
+function justCompleted(before, after) {
+  return !!before && !!after && after.done > before.done
+}
+
 // 今日任务摘要：首页 Dock 与结算页共用的单一文案源
 // done = 已达标（含已领取）；remain = 还差几个达标；text 随状态给出下一步动机
 function dailyBrief() {
@@ -239,10 +307,12 @@ function dailyBrief() {
 }
 
 module.exports = {
-  TASKS: TASKS, FULL_DAILY: FULL_DAILY, FULL_WEEKLY: FULL_WEEKLY, COSMETIC_META: COSMETIC_META,
-  weekKey: weekKey, ensure: ensure,
+  TASKS: TASKS, FULL_DAILY: FULL_DAILY, FULL_WEEKLY: FULL_WEEKLY, FULL_STREAK: FULL_STREAK,
+  COSMETIC_META: COSMETIC_META,
+  weekKey: weekKey, prevDay: prevDay, ensure: ensure,
   onDust: onDust, onClear: onClear, onGameClubTap: onGameClubTap, onEndlessDepth: onEndlessDepth,
   getState: getState, hasClaimable: hasClaimable, claim: claim, track: track,
-  shardNeed: shardNeed, trackSummary: trackSummary, dailyBrief: dailyBrief,
+  shardNeed: shardNeed, trackSummary: trackSummary, dailyBrief: dailyBrief, streakInfo: streakInfo,
+  justCompleted: justCompleted,
   cosmeticMeta: cosmeticMeta
 }

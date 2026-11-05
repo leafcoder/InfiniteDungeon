@@ -654,6 +654,8 @@ GameScene.prototype.onWin = function (st) {
   const stars = ratio >= 1 ? 3 : ratio >= 0.6 ? 2 : 1
   let dustEarn
   let extra = []
+  // 结算前快照：用于判断「本关是否刚好让某个日常达标」，给达成瞬间一个正反馈
+  const briefBefore = task.dailyBrief()
   try {
     if (this.mode === 'daily') {
       const trait = storage.getHeroTrait()
@@ -755,13 +757,16 @@ GameScene.prototype.onWin = function (st) {
     dustEarn = dustEarn || 0
   }
   const self = this
+  // completeLevel / addDust 已更新任务进度，此处取结算后快照
+  const briefAfter = task.dailyBrief()
+  const briefLine = (task.justCompleted(briefBefore, briefAfter) ? '🎉 任务达成！' : '📋 ') + briefAfter.text
   this.buildOverlay('win', {
     title: '通关！' + '★'.repeat(stars) + '☆'.repeat(3 - stars),
     lines: [
       '用时 ' + st.time + 's · 光尘 ' + st.gems + '/' + st.gemTotal + (timeOK ? ' ⚡' : ''),
       '光尘 +' + dustEarn + '✦（' + st.gems + '/' + st.gemTotal + '）' + extra.join(' '),
-      // 通关后任务进度已由 completeLevel 更新，此处给出「再玩一关就全勤」的下一步动机
-      '📋 ' + task.dailyBrief().text
+      // 本关刚好达标 → 达成正反馈；否则给出「再玩一关就全勤」的下一步动机
+      briefLine
     ],
     btns: [
       { label: this.mode === 'weekly' && this.weekIdx < 4 ? '下一关' : '继续', onTap: function () { self.afterRound(true) } },
