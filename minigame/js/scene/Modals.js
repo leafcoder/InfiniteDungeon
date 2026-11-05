@@ -718,6 +718,26 @@ function showSeason(sm, onClose) {
   return m
 }
 
+// 首入引导页（onboarding）：操作 / 玩法总览，关闭后由调用方标记 seen
+function showIntro(sm, onClose) {
+  const rows = [
+    { ick: 'daily', icCol: '#FFD86E', title: '每日签到', sub: '连续登录送光尘，里程碑解锁专属皮肤' },
+    { ick: 'rank', icCol: '#FFC15E', title: '赛季征程', sub: '通关 / 完成任务累积经验，升级领奖励' },
+    { ick: 'bag', icCol: '#FF9F6E', title: '道具背包', sub: '右下角点按使用：隐身 / 冰冻 / 魔弹…' },
+    { ick: 'monster', icCol: '#FF7A92', title: '避怪寻路', sub: '拖动旅人绕开怪物，找到发光出口通关' }
+  ]
+  return new Modal(sm, {
+    title: '欢迎来到无尽地宫',
+    lines: [
+      L('拖动屏幕，带旅人走向发光的出口', { b: true, c: '#FFD86E', s: 14 }),
+      L('收集光点兑换光尘，解锁皮肤与能力；异变日挑战更刺激', { c: '#DCD6FF', s: 11.5 })
+    ],
+    rows: rows,
+    buttons: [{ label: '开始探索', primary: true }],
+    onClose: onClose
+  })
+}
+
 /* ---------- 排行榜 ---------- */
 
 function showRank(sm, onClose) {
@@ -1335,6 +1355,7 @@ module.exports = {
   showAch: showAch,
   showRank: showRank,
   showSeason: showSeason,
+  showIntro: showIntro,
   showDaily: showDaily,
   showCheckin: showCheckin,
   showCodex: showCodex,

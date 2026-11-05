@@ -12,6 +12,9 @@ const endless = require(path.join(ROOT, 'core/endless.js'));
 const festival = require(path.join(ROOT, 'core/festival.js'));
 const HomeScene = require(path.join(ROOT, 'scene/HomeScene.js'));
 
+// 隔离首入引导页影响：本套件验证布局 / 入口逻辑，与 onboarding 无关
+storage.setTutorialSeen();
+
 let pass = 0, fail = 0;
 function T(name, cond) {
   if (cond) { pass++; console.log('  ✓ ' + name); }

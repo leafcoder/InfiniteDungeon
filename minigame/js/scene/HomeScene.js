@@ -201,6 +201,15 @@ HomeScene.prototype.enter = function () {
   // 今日任务摘要：进页时缓存一次，避免 drawDock 每帧同步读存储；任务面板关闭时刷新
   this.taskBrief = task.dailyBrief()
 
+  // 首入引导页（onboarding）：未看过引导则自动弹出，关闭后由回调标记 seen
+  if (!storage.getTutorialSeen()) {
+    const self = this
+    this.modal = Modals.showIntro(this.sm, function () {
+      self.modal = null
+      storage.setTutorialSeen()
+    })
+  }
+
   this.touchDown = null
   this.dirty = true
 
