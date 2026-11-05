@@ -17,6 +17,7 @@ const endless = require('../core/endless')
 const festival = require('../core/festival')
 const mutation = require('../core/mutation')
 const checkin = require('../core/checkin')
+const ngplus = require('../core/ngplus')
 const task = require('../core/task')
 const Icons = require('../ui/Icons')
 const club = require('../ui/gameclub')
@@ -120,13 +121,21 @@ HomeScene.prototype.enter = function () {
 
   // ---- 底部锚点：Dock → CTA（先算底部，网格高度随之自适应） ----
   const dockY = H - SAB - 12 * u - 56 * u
+  // 轮回 NG+：120 关全通后 CTA 升级为轮回入口（主线无前进目标 → 把回访钩子交给周目）
+  this.ng = ngplus.info()
+  const ngGo = this.ng.unlocked
   this.goBtn = new Button({
     x: W / 2 - 120 * u, y: dockY - 66 * u, w: 240 * u, h: 54 * u,
-    label: '▶ 继续冒险', sub: '第 ' + this.unlocked + ' 关 · ' + this.zoneOf(this.unlocked).name,
+    label: ngGo ? '⟳ 轮回再临' : '▶ 继续冒险',
+    sub: ngGo
+      ? (this.ng.cycle > 0
+        ? ('第 ' + this.ng.cycle + ' 周目 · ' + this.ng.ngClear + '/120 · 光尘 ×' + this.ng.dustMul)
+        : '开启轮回 · 重跑 120 关 · 光尘 ×1.25 起')
+      : '第 ' + this.unlocked + ' 关 · ' + this.zoneOf(this.unlocked).name,
     fontSize: Math.round(16 * u),
     fill: '#FFC15E', fill2: '#FF9F6E', textColor: 'rgba(10,12,32,0.92)',
     primary: true, radius: 27 * u,
-    onTap: function () { self.sm.switch('game', { level: self.unlocked }) }
+    onTap: ngGo ? function () { self.openNgPlus() } : function () { self.sm.switch('game', { level: self.unlocked }) }
   })
   this.styleGoBtn()
   this.dock = []
@@ -518,6 +527,26 @@ HomeScene.prototype.openCheckin = function () {
   })
 }
 
+// 轮回入口：未开启/周目完成 → 确认弹窗（开启或进入下一周目）；周目进行中 → 直接续跑第 1 关
+HomeScene.prototype.openNgPlus = function () {
+  const self = this
+  const ng = ngplus.info()
+  if (ng.cycle > 0 && !ng.cycleDone) {
+    this.sm.switch('game', { mode: 'level', level: 1 })
+    return
+  }
+  this.modal = Modals.showNgPlus(this.sm, function () {
+    const r = ngplus.enterNext()
+    self.modal = null
+    if (!r.ok) { self.sm.toast('尚未通关全部 120 关'); return }
+    const name = r.got.map(function (g) {
+      return g.kind === 'title' ? '称号「' + g.n + '」' : ('碎片 ×' + g.n)
+    }).join(' · ')
+    self.sm.toast('⟳ 第 ' + r.cycle + ' 轮回开启' + (name ? ' · ' + name : ''))
+    self.sm.switch('game', { mode: 'level', level: 1 })
+  })
+}
+
 HomeScene.prototype.showToast = function (msg) {
   this.toastMsg = msg
   this.toastUntil = Date.now() + 1600
@@ -538,6 +567,13 @@ HomeScene.prototype.zoneColor = function (zi) {
 // 语义锚定「继续冒险要进的分区」（unlocked 所在区），与按钮副标题文案一致
 HomeScene.prototype.styleGoBtn = function () {
   if (!this.goBtn) return
+  // 轮回入口：固定轮回紫（与词缀 banner 同色系，语义区分主线 CTA）
+  if (this.ng && this.ng.unlocked) {
+    this.goBtn.fill = '#E36BFF'
+    this.goBtn.fill2 = '#9646B3'
+    this.goBtn.textColor = 'rgba(18,8,30,0.92)'
+    return
+  }
   const zi = Math.max(0, ZONES.indexOf(this.zoneOf(this.unlocked)))
   const zc = this.zoneColor(zi)
   if (zc && zc.charAt(0) === '#') {

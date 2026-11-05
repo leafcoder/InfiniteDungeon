@@ -17,6 +17,7 @@ const endless = require('../core/endless')
 const festival = require('../core/festival')
 const task = require('../core/task')
 const checkin = require('../core/checkin')
+const ngplus = require('../core/ngplus')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
 const TaskPanel = require('../scene/TaskPanel')
@@ -794,6 +795,35 @@ function showEndless(sm, startFn, onClose) {
   })
 }
 
+/* ---------- 轮回 NG+（全通后周目入口） ---------- */
+
+function showNgPlus(sm, onEnter) {
+  const ng = ngplus.info()
+  const nextCycle = ng.cycle + 1
+  const modNames = ngplus.modsFor(nextCycle).map(function (mk) {
+    for (let i = 0; i < weekly.MODS.length; i++) if (weekly.MODS[i].key === mk) return weekly.MODS[i].name
+    return mk
+  }).join('+') || '无'
+  const btnLabel = ng.cycle === 0
+    ? '⟳ 开启轮回 · 第 1 周目'
+    : '⟳ 进入第 ' + nextCycle + ' 周目'
+  return new Modal(sm, {
+    title: '轮回再临',
+    lines: [
+      L('120 关全部通关——地宫在轮回中苏醒，一切都变得更强。', { b: true, c: '#E36BFF' }),
+      L(''),
+      L('第 ' + nextCycle + ' 周目强化：' + modNames, { s: 12 }),
+      L('光尘收益 ×' + ngplus.dustMul(nextCycle) + '（周目越深加成越高，最高 ×2）', { s: 12, c: '#6FE3D2' }),
+      L(ng.cycle === 0 ? '首次开启获得限定称号「轮回行者」' : '进入新周目获得碎片 ×' + ng.shardReward, { s: 12, c: '#FFB46E' }),
+      L('关卡从第 1 关重新开始，主线星数与收集保留。', { s: 11, c: '#9AA0C8' })
+    ],
+    buttons: [
+      { label: btnLabel, primary: true, onTap: function () { onEnter() } },
+      { label: '再想想' }
+    ]
+  })
+}
+
 /* ---------- 每日签到（连续签到里程碑） ---------- */
 
 function showCheckin(sm, onClose) {
@@ -1185,6 +1215,7 @@ module.exports = {
   showRank: showRank,
   showDaily: showDaily,
   showCheckin: showCheckin,
+  showNgPlus: showNgPlus,
   showWeekly: showWeekly,
   showCode: showCode,
   showJournal: showJournal,

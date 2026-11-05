@@ -13,6 +13,7 @@ const ad = require('../core/ad')
 const endless = require('../core/endless')
 const festival = require('../core/festival')
 const mutation = require('../core/mutation')
+const ngplus = require('../core/ngplus')
 const PlayCore = require('../core/play')
 const Modal = require('../ui/Modal')
 const Icons = require('../ui/Icons')
@@ -56,6 +57,7 @@ GameScene.prototype.enter = function (params) {
   params = params || {}
   this.mode = params.mode || 'level'
   this.weekIdx = params.weekIdx
+  this.ngCycle = 0 // 轮回周目（仅 mode=level 无口令词缀时重读，其余模式恒 0 防跨局残留）
   // 无尽塔（N6）：难度由层号派生；节日活动（N12）：难度由活动关配置决定
   this.floor = 0
   this.festId = null
@@ -80,9 +82,13 @@ GameScene.prototype.enter = function (params) {
     this.level = Math.max(1, Math.min(params.level || 1, storage.TOTAL))
     this.mods = params.mods || []
     this.seed = params.seed
-    // 地宫异变：普通关（非 Boss 追逐 L80+）且无外部词缀（口令/周挑战）时，挂今日变异词缀
     this.mut = null
-    if (this.mode === 'level' && this.mods.length === 0 && !params.code && this.level < 80) {
+    // 轮回 NG+：主线模式且无外部词缀/口令时，按当前周目挂强化词缀（优先于异变，
+    // 光尘收益走 dustMul 结算加成；口令关/带词缀关不判轮回，防刷加成）
+    this.ngCycle = (this.mode === 'level' && !params.code && this.mods.length === 0) ? ngplus.cycle() : 0
+    if (this.ngCycle > 0) {
+      this.mods = ngplus.modsFor(this.ngCycle)
+    } else if (this.mode === 'level' && this.mods.length === 0 && !params.code && this.level < 80) {
       this.mut = mutation.today()
       this.mods = this.mut.mods.slice()
     }
@@ -121,6 +127,11 @@ GameScene.prototype.enter = function (params) {
   // （必须放在上方 banner 重置之后，否则会被清掉）
   if (this.mut && this.mut.mods.length > 0) {
     this.banner = { text: '⚗ ' + this.mut.name + ' · ' + this.mut.desc, until: Date.now() + 2600, color: this.mut.color }
+  }
+  // 轮回 NG+ 开局提示（与异变互斥：轮回关不挂异变词缀）
+  if (this.ngCycle > 0) {
+    this.banner = { text: '⟳ 第 ' + this.ngCycle + ' 轮回 · 光尘 ×' + ngplus.dustMul(this.ngCycle) + ' · 强化词缀生效', until: Date.now() + 2600, color: '#E36BFF' }
+    this.setHint('第 ' + this.ngCycle + ' 轮回 · 词缀：' + (ngplus.modsFor(this.ngCycle).join('+') || '无'))
   }
   // 新手引导（E5）：仅普通关卡 + 设置开关开启时生效
   this.tutOn = this.mode === 'level' && storage.getSetting('tutorial', true)
@@ -790,6 +801,14 @@ GameScene.prototype.onWin = function (st) {
     if (this.mut && this.mut.bonus > 1) {
       dustEarn = mutation.applyBonus(dustEarn, this.mut)
       extra.push('⚗ ' + this.mut.name + ' ×' + this.mut.bonus)
+    }
+    // 轮回 NG+：光尘收益按周目加成（与异变互斥，本关不挂异变词缀）；计入周目进度
+    if (this.ngCycle > 0) {
+      const ngMul = ngplus.dustMul(this.ngCycle)
+      dustEarn = Math.round(dustEarn * ngMul)
+      extra.push('⟳ 第 ' + this.ngCycle + ' 轮回 ×' + ngMul)
+      ngplus.incClear()
+      if (ngplus.info().cycleDone) extra.push('🏆 本周目 120 关全部通关！')
     }
     storage.addDust(dustEarn)
   } catch (e) {

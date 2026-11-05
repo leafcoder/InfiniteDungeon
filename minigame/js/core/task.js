@@ -83,6 +83,7 @@ const COSMETIC_META = {
     '地宫常驻': { desc: '每周任务全勤限定称号', color: '#FFC15E' },
     '地宫守望': { desc: '连续 14 天全勤限定称号', color: '#6FE3D2' },
     '晨昏与共': { desc: '连续签到 14 天限定称号', color: '#FFB46E' },
+    '轮回行者': { desc: '开启轮回 NG+ 限定称号', color: '#E36BFF' },
     '深渊纪年': { desc: '赛季征程 Lv.25 限定称号', color: '#E36BFF' }
   }
 }
