@@ -846,7 +846,7 @@ function showCodex(sm, onClose) {
           ick: 'check',
           icCol: e.color,
           title: e.glyph + ' ' + e.name,
-          sub: e.desc,
+          sub: (e.use ? (e.desc + '｜用法：' + e.use) : e.desc),
           tag: '×' + n,
           tagColor: e.color
         })

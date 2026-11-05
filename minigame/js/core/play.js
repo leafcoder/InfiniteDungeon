@@ -17,6 +17,20 @@ const OPPD = { U: 'D', D: 'U', L: 'R', R: 'L' }
 const BAG_MAX = 3
 const FX_TYPES = ['cloak', 'freeze', 'dash', 'shield', 'magnet', 'flare', 'decoy', 'hourglass', 'scroll', 'bow']
 
+// 首次获得道具时弹出的 1 行用法提示（补齐「不知道怎么用」的即时说明缺口）
+const FX_HINT = {
+  cloak: '隐身斗篷：点右下角背包格使用，约8秒内怪物看不见你',
+  freeze: '冰冻星：点右下角背包格使用，约8秒冻结全场怪物与子弹',
+  dash: '疾风靴：点右下角背包格使用，约8秒移速翻倍',
+  shield: '护盾：点右下角背包格使用，抵挡一次碰撞或子弹',
+  magnet: '磁铁：点右下角背包格使用，约8秒自动吸附附近光点',
+  flare: '照明弹：点右下角背包格使用，约8秒扩大迷雾视野',
+  decoy: '诱饵：点右下角背包格使用，约8秒放诱饵引怪（Boss不受骗）',
+  hourglass: '时光沙漏：被动道具，被抓瞬间自动回退3步，无需手动',
+  scroll: '瞬移卷轴：点右下角背包格使用，直接传送到出口前（需先拿钥匙）',
+  bow: '魔弹：点右下角背包格发射，命中视线内最近怪，普通怪掉光尘、Boss眩晕'
+}
+
 function PlayCore(level, opts) {
   opts = opts || {}
   this.level = level
@@ -221,6 +235,7 @@ PlayCore.prototype.initLevel = function () {
   this.collected = 0
   this.bag = []
   this.bagSel = 0
+  this._fxSeen = {} // 本局已提示用法的道具类型（避免重复弹窗）
   // 连败保护：开局补给 1 个基础道具（确定性选取）
   if (this.mercy && this.mercy.gift) {
     this.bag.push({ type: this.mercy.gift, count: 1 })
@@ -1139,6 +1154,7 @@ PlayCore.prototype.checkPickup = function () {
     const slot = this.addToBag(it.type)
     // 魔弹杖：拾取即装填 3 发（同类叠加时不覆盖剩余弹药）
     if (slot && it.type === 'bow' && slot.count < 3) slot.count = 3
+    if (slot) this._hintFxOnce(it.type) // 本局首次获得该道具：弹一句用法
     this.emit('pickup', { type: it.type, x: it.x, y: it.y, count: slot ? slot.count : 1 })
   }
 }
@@ -1155,6 +1171,14 @@ PlayCore.prototype.addToBag = function (type) {
   this.bag.push(slot)
   this.bagSel = this.bag.length - 1
   return slot
+}
+
+// 本局内首次获得某类型道具时，弹一句用法提示（补齐「不知道怎么用」的即时说明缺口）
+PlayCore.prototype._hintFxOnce = function (type) {
+  if (this._fxSeen[type]) return
+  this._fxSeen[type] = true
+  const h = FX_HINT[type]
+  if (h) this.emit('hint', h)
 }
 
 // 虚空回响：每 3 光点充能 1 次时间回溯（沙漏入包，被抓时自动发动）

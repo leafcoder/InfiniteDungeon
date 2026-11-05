@@ -1601,9 +1601,9 @@ GameScene.prototype.drawBag = function (ctx, u) {
         label: '—', fontSize: Math.round(11 * u),
         fill: 'rgba(255,255,255,0.10)', fill2: 'rgba(255,255,255,0.06)', textColor: '#F3F1FF',
         onTap: function () {
-          if (self.overlay || self.loading || self.core.bag.length === 0) return
+          if (self.overlay || self.loading || i >= self.core.bag.length) return
           self._usedItem = true
-          self.core.useItem(Math.min(self.core.bagSel, self.core.bag.length - 1))
+          self.core.useItem(i)
         }
       }))
     }
