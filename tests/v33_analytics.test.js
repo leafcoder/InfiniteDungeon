@@ -1,6 +1,10 @@
-// v1.11 批次20 埋点上报抽象层（接口桩）回归
+// v1.4 纯单机埋点回归：本机环形缓冲 / 白名单 / 隐私过滤 / 零网络能力
+// 用户已确认「暂不接后端，只做单机游戏」：configure / setTransport / flush / wx.request 全部移除，
+// 这里把「零网络」固化成源码与运行时双重断言，防止后端接口桩日后悄悄回潮。
 const path = require('path');
+const fs = require('fs');
 const ROOT = '/home/zhanglei3/WorkBuddy/2026-10-26-14-05-57/MazeGame/minigame/js';
+const REPO = '/home/zhanglei3/WorkBuddy/2026-10-26-14-05-57/MazeGame';
 
 const mem = {};
 let reqCount = 0;
@@ -8,7 +12,7 @@ global.wx = {
   getStorageSync: (k) => mem[k],
   setStorageSync: (k, v) => { mem[k] = v; },
   removeStorageSync: (k) => { delete mem[k]; },
-  request: () => { reqCount++; },
+  request: () => { reqCount++; },   // 若有人偷偷接后端，这里会被计数
   getSystemInfoSync: () => ({ model: 'test', windowWidth: 375, windowHeight: 667, pixelRatio: 2 }),
   getMenuButtonBoundingClientRect: () => ({ top: 20, height: 32, width: 80, right: 360, left: 280 }),
   shareAppMessage: () => {},
@@ -18,7 +22,6 @@ global.wx = {
 const analytics = require(path.join(ROOT, 'core/analytics.js'));
 const storage = require(path.join(ROOT, 'core/storage.js'));
 const task = require(path.join(ROOT, 'core/task.js'));
-const GameScene = require(path.join(ROOT, 'scene/GameScene.js'));
 const Modals = require(path.join(ROOT, 'scene/Modals.js'));
 
 let pass = 0, fail = 0;
@@ -30,76 +33,52 @@ function makeSM() {
   const toasts = [];
   return { W: 375, H: 667, sat: 20, sab: 10, sal: 10, sar: 10, toasts, toast: (t) => toasts.push(t), sceneModal: () => {}, switch: () => {} };
 }
-function bootEnter(gs, params) {
-  gs.enter(params);
-  if (gs.loading) gs.loading.until = 0;
-  gs.update();
-  return gs;
-}
+function src(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
+function repo(rel) { return fs.readFileSync(path.join(REPO, rel), 'utf8'); }
 
 console.log('--- 1. 缓冲 / 白名单 / 隐私过滤 ---');
 {
   analytics.reset();
-  const r1 = analytics.track('level_win', { level: 5, stars: 3 });
-  T('合法事件入缓冲', analytics.summary().buffered === 1 && r1.queued === 1);
-  T('byEvent 统计正确', analytics.summary().byEvent.level_win === 1);
+  const r1 = analytics.track('td_start', { seed: 7 });
+  T('合法塔防事件入缓冲', analytics.summary().buffered === 1 && r1.queued === 1);
+  T('byEvent 统计正确', analytics.summary().byEvent.td_start === 1);
   T('事件带时间戳', typeof analytics.loadBuffer()[0].t === 'number');
   const r2 = analytics.track('not_registered_event', { x: 1 });
   T('未登记事件被拒（防拼写漂移）', r2.reason === 'unknown_event' && analytics.summary().buffered === 1);
-  analytics.track('level_fail', { level: 1, obj: { a: 1 }, fn: function () {}, long: 'x'.repeat(100), ok: true });
+  analytics.track('td_end', { reached: 3, obj: { a: 1 }, fn: function () {}, long: 'x'.repeat(100), ok: true });
   const p = analytics.loadBuffer()[1].p;
-  T('payload 只保留标量', p.level === 1 && p.ok === true && !('obj' in p) && !('fn' in p));
-  T('长字符串截断到 32', p.long.length === 32);
-  // 环形缓冲上限
+  T('payload 只保留标量', p.reached === 3 && p.ok === true && !('obj' in p) && !('fn' in p));
+  T('长字符串截断到 32 字符', p.long.length === 32);
+  T('payload 键数上限 8', Object.keys(p).length <= 8);
   for (let i = 0; i < 60; i++) analytics.track('checkin', { streak: i });
   T('缓冲封顶 50 条不膨胀', analytics.summary().buffered === 50);
-  T('最旧记录被挤出（环形）', analytics.loadBuffer()[0].e !== 'level_win');
-  // 开关
+  T('最旧记录被挤出（环形）', analytics.loadBuffer()[0].e !== 'td_start');
   analytics.setEnabled(false);
   const before = analytics.summary().buffered;
-  analytics.track('level_win', { level: 9 });
+  analytics.track('td_start', { seed: 9 });
   T('关闭后不记录', analytics.summary().buffered === before);
   analytics.setEnabled(true);
   T('isEnabled 反映开关', analytics.isEnabled() === true);
-  T('默认无 transport（零网络请求）', analytics.summary().hasTransport === false && reqCount === 0);
+  analytics.clear();
+  T('clear 清空缓冲', analytics.summary().buffered === 0);
 }
 
-console.log('--- 2. transport 降级 / 失败重试 / 后端接入 ---');
+console.log('--- 2. 纯单机：代码层与运行时均无网络能力 ---');
 {
-  analytics.reset();
-  analytics.track('level_win', { level: 1 });
-  analytics.track('level_fail', { level: 2 });
-  analytics.track('checkin', { streak: 3 });
-  T('无后端时事件留在本地缓冲', analytics.summary().buffered === 3);
-  // 后端返回 false：保留缓冲
-  analytics.setTransport(function () { return false; });
-  analytics.track('level_win', { level: 3 });
-  T('transport 返回 false → 缓冲保留', analytics.summary().buffered === 4);
-  T('记录 lastError', analytics.summary().lastError.length > 0);
-  // 后端抛错：保留缓冲
-  analytics.setTransport(function () { throw new Error('boom'); });
-  analytics.track('level_win', { level: 4 });
-  T('transport 抛错 → 缓冲保留', analytics.summary().buffered === 5);
-  T('lastError 记录异常信息', analytics.summary().lastError.indexOf('boom') >= 0);
-  // 后端恢复：flush 成功清空
-  let sent = [];
-  analytics.setTransport(function (recs) { sent = sent.concat(recs); return true; });
-  const ok = analytics.flush();
-  T('flush 成功', ok === true);
-  T('flush 投递全部 5 条', sent.length === 5);
-  T('成功清空缓冲', analytics.summary().buffered === 0);
-  T('sent 累计生效', analytics.summary().sent >= 5);
-  // 内置 wx.request transport
-  analytics.reset();
-  reqCount = 0;
-  analytics.configure({ endpoint: 'https://example.test/collect' });
-  T('configure 后 hasTransport=true', analytics.summary().hasTransport === true);
-  analytics.track('level_win', { level: 7 });
-  T('内置 transport 触发 wx.request', reqCount === 1);
-  T('投递后缓冲清空', analytics.summary().buffered === 0);
+  const s = src('core/analytics.js');
+  T('源码无 wx.request 调用', !/wx\.request\s*\(/.test(s));
+  T('源码无 configure / setTransport / flush 函数', !/function (configure|setTransport|flush)\s*\(/.test(s));
+  T('exports 不含后端接口', typeof analytics.configure === 'undefined' && typeof analytics.setTransport === 'undefined' && typeof analytics.flush === 'undefined');
+  T('summary 不再暴露后端字段', analytics.summary().hasTransport === undefined && analytics.summary().endpoint === undefined && analytics.summary().sent === undefined);
+  T('埋点全程零 wx.request 调用', reqCount === 0);
+  T('白名单含塔防与已迁入外围事件', ['td_start', 'td_end', 'td_wave', 'td_bless', 'ach_unlock', 'season_claim', 'checkin'].every(k => analytics.TRACK_EVENTS.indexOf(k) >= 0));
+  T('白名单已移除迷宫事件', ['level_win', 'level_fail', 'daily_win', 'weekly_win', 'festival_win', 'endless_depth', 'mutation_win', 'ngplus_enter'].every(k => analytics.TRACK_EVENTS.indexOf(k) === -1));
+  T('storage 移除微信托管数据上报', src('core/storage.js').indexOf('setUserCloudStorage') === -1 && typeof storage.reportScoreKV === 'undefined');
+  T('game.json 无云开发 / 域名配置', repo('minigame/game.json').indexOf('cloud') === -1 && repo('minigame/game.json').indexOf('http') === -1);
+  T('project.config.json 无云函数根 / 合法域名', repo('minigame/project.config.json').indexOf('cloudfunctionRoot') === -1 && repo('minigame/project.config.json').indexOf('request') === -1);
 }
 
-console.log('--- 3. 事件接线（成就 / 通关 / 失败 / 重置） ---');
+console.log('--- 3. 外围接线（成就 / 重置） ---');
 {
   analytics.reset();
   storage.resetProgress();
@@ -107,20 +86,6 @@ console.log('--- 3. 事件接线（成就 / 通关 / 失败 / 重置） ---');
   T('unlockAch → ach_unlock 事件', (analytics.summary().byEvent.ach_unlock || 0) >= 1);
   const payload = analytics.loadBuffer().filter(r => r.e === 'ach_unlock')[0].p;
   T('成就 payload 含 id/reward', payload.id === 'journey' && typeof payload.reward === 'number');
-  // onWin / onFail（复用 v28 无头脚手架，stub buildOverlay 隔离渲染）
-  try {
-    const gs = new GameScene(makeSM());
-    bootEnter(gs, { level: 6, mode: 'level' });
-    gs.buildOverlay = function () {};
-    gs.onWin({ gems: 5, gemTotal: 5, steps: 20, swipe: 2, time: 30 });
-    T('onWin → level_win 事件', (analytics.summary().byEvent.level_win || 0) >= 1);
-    gs.onFail('caught');
-    T('onFail → level_fail 事件', (analytics.summary().byEvent.level_fail || 0) >= 1);
-  } catch (e) {
-    console.log('  ⚠ GameScene 无头跳过：' + e.message);
-    T('GameScene 接线', false);
-  }
-  // resetProgress 清理埋点键
   const had = analytics.summary().buffered > 0;
   storage.resetProgress();
   T('resetProgress 清空埋点缓冲', had && analytics.summary().buffered === 0);
@@ -131,23 +96,17 @@ console.log('--- 4. 与既有本机任务漏斗并存（互不干扰） ---');
   analytics.reset();
   task.track('expose');
   T('task.track 仍写本机漏斗', storage.getTaskTrack().expose >= 1);
-  T('漏斗事件不污染上报缓冲', analytics.summary().buffered === 0);
+  T('漏斗事件不污染埋点缓冲', analytics.summary().buffered === 0);
   T('trackSummary 仍可用', typeof task.trackSummary().clickRate === 'number');
 }
 
-console.log('--- 5. 设置页不再暴露开发向埋点状态（功能清理） ---');
+console.log('--- 5. 设置页不暴露开发向埋点状态 ---');
 {
   analytics.reset();
-  analytics.track('level_win', { level: 1 });
-  try {
-    const m = Modals.showSettings(makeSM(), function () {});
-    const row = (m.rows || []).filter(r => (r.title || '').indexOf('埋点上报') >= 0)[0];
-    T('设置页不再显示埋点上报状态行', !row);
-    T('埋点数据层仍在采集（展示层下线不影响功能）', analytics.summary().buffered > 0);
-  } catch (e) {
-    console.log('  ⚠ showSettings 跳过：' + e.message);
-    T('设置页状态行检查', false);
-  }
+  analytics.track('td_start', { seed: 1 });
+  const m = Modals.showSettings(makeSM(), function () {});
+  T('设置页不再显示埋点上报状态行', !(m.rows || []).some(r => (r.title || '').indexOf('埋点上报') >= 0));
+  T('埋点数据层仍在采集（展示层下线不影响功能）', analytics.summary().buffered > 0);
 }
 
 console.log('');

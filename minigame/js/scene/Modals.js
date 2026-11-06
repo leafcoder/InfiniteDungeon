@@ -1,26 +1,16 @@
 /**
- * 系统弹窗构建器（M3）
- * 各系统 1:1 迁移自小程序版首页弹层：
- * - supply   补给站：光尘余额 + 道具时长升级 + 技能解锁 + 皮肤切换
- * - ach      成就图鉴：成就列表（解锁态）+ 图鉴收集度
- * - rank     排行榜：本机最佳（微信好友榜需 open data context，此处展示本机数据 + 提示）
- * - daily    每日挑战：今日状态 + 开始
- * - weekly   周挑战：本周 5 关计划（词缀）+ 完成态 + 开始
- * - code     挑战码：模板生成 + 复制口令；进入游戏页自动读剪贴板识别
+ * 系统弹窗构建器（v1.4 单塔防 / 纯单机版）
+ * 保留的面板：补给站、皮肤、设置、成就、赛季、图鉴（含旅人手记）、签到、首入引导。
+ * 已随迷宫玩法删除：每日 / 周挑战 / 节日 / 无尽 / 轮回 / 挑战码 / 剪贴板口令。
+ * 图鉴条目与旅人手记作为历史陈列保留，不新增塔防条目——否则老存档里程碑会永久失效。
  */
 const storage = require('../core/storage')
 const theme = require('../core/theme')
-const weekly = require('../core/weekly')
-const challenge = require('../core/challenge')
 const ad = require('../core/ad')
-const endless = require('../core/endless')
-const festival = require('../core/festival')
 const task = require('../core/task')
 const checkin = require('../core/checkin')
-const ngplus = require('../core/ngplus')
 const codex = require('../core/codex')
 const season = require('../core/season')
-const mode = require('../core/mode')
 const analytics = require('../core/analytics')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
@@ -35,8 +25,6 @@ function L(t, o) {
   if (o) for (const k in o) ln[k] = o[k]
   return ln
 }
-
-/* ---------- 补给站（单页内联购买，行卡直接点按） ---------- */
 
 const SKIN_ICON = { classic: 'castle', glow: 'leaf', festival: 'lantern', cosmos: 'spark', abyss: 'wave', sakura: 'flower', dawn: 'spark' }
 const SKIN_COL = { classic: '#FFC15E', glow: '#6FE3D2', festival: '#FF7A92', cosmos: '#9B8CFF', abyss: '#40E0FF', sakura: '#FF9ECB', dawn: '#FFB46E' }
@@ -194,9 +182,9 @@ function shardGuide(sm, k, t, cost, reopen) {
 function buildHeroRows(sm, refresh) {
   const cur = storage.getHero()
   const stats = storage.heroStats()
-  // 塔防默认模式：解锁源已迁入波数口径，进度单位随之切换（局 / 波）
-  const uStar = mode.isTowerDefault() ? ' 波' : ' 星'
-  const uClear = mode.isTowerDefault() ? ' 局' : ' 关'
+  // 解锁源已迁入波数口径，进度单位固定为「波 / 局」
+  const uStar = ' 波'
+  const uClear = ' 局'
   return storage.HEROES.map(function (h) {
     const avail = storage.heroAvailable(h.id)
     const using = cur === h.id
@@ -237,7 +225,7 @@ function buildHeroRows(sm, refresh) {
         if (h.by === 'stars' || h.by === 'clears') {
           const cur2 = storage.heroStats()
           const lack = h.need - (h.by === 'stars' ? cur2.stars : cur2.clears)
-          sm.toast(h.by === 'stars' ? '还差 ' + lack + (mode.isTowerDefault() ? ' 波解锁' : ' 颗星解锁') : '还差 ' + lack + (mode.isTowerDefault() ? ' 局守卫解锁' : ' 关通关解锁'))
+          sm.toast(h.by === 'stars' ? '还差 ' + lack + ' 波解锁' : '还差 ' + lack + ' 局守卫解锁')
           return
         }
         if (h.by === 'dust') {
@@ -366,8 +354,6 @@ function showSkin(sm, onClose) {
   return new Modal(sm, makeOpts())
 }
 
-/* ---------- 设置（音效 / 震动 / 重置进度） ---------- */
-
 function showSettings(sm, onClose) {
   const makeOpts = function () {
     const sound = storage.getSetting('sound', true)
@@ -408,19 +394,7 @@ function showSettings(sm, onClose) {
         }
       }
     ]
-    // 挑战码：低频硬核功能从顶栏收进设置二级页，不再占常驻热区
-    rows.push({
-      ick: 'lock', icCol: '#FFD86E',
-      title: '挑战码', sub: mode.isTowerDefault() ? '依赖迷宫关卡，当前已下线' : '输入口令挑战自定义词缀关卡',
-      tag: '输入 ›', tagColor: '#FFC15E',
-      onTap: function () {
-        // 软切换：塔防默认模式下该行仅作历史陈列，不进入已下线的迷宫关卡
-        if (mode.isTowerDefault()) { sm.toast('迷宫玩法已下线'); return }
-        sm.sceneModal(showCode(sm, function (dec) {
-          sm.switch('game', { mode: 'custom', level: dec.level, mods: dec.mods, seed: dec.seed, code: dec.code })
-        }, function () {}))
-      }
-    })
+    // 挑战码已随迷宫玩法删除（纯单机不再提供口令 / 剪贴板入口）
     return {
       title: '设置',
       lines: [L('调整游戏体验', { c: '#FFC15E', b: true, s: 13 })],
@@ -589,8 +563,6 @@ function showSupply(sm, onClose) {
   return new Modal(sm, makeOpts())
 }
 
-/* ---------- 成就图鉴 ---------- */
-
 function showAch(sm, onClose) {
   const list = storage.achList()
   const rows = []
@@ -717,106 +689,7 @@ function showIntro(sm, onClose) {
   })
 }
 
-/* ---------- 排行榜 ---------- */
-
-/* ---------- 每日挑战 ---------- */
-
-/* ---------- 节日限时活动（N12） ---------- */
-
 // 返回活动弹窗；无进行中活动时返回 null（HomeScene 据此隐藏入口）
-function showFestival(sm, startFn, onClose) {
-  const fest = festival.getActive()
-  if (!fest) return null
-  const done = storage.getFestDone(fest.id)
-  const allDone = storage.isFestDone(fest.id)
-  const cleared = done.filter(function (x) { return x }).length
-  const nextIdx = done.findIndex(function (x) { return !x })
-  // 专属成就解锁态
-  const ach = storage.achList().filter(function (a) { return a.id === 'fest_clear' || a.id === 'fest_all' })
-  const lines = [
-    L(fest.emoji + ' ' + fest.tagline, { b: true, c: '#FFC15E' }),
-    L(''),
-    L('· 活动期间开放 3 关限定词缀关（难度递进，可反复挑战）', { s: 12 }),
-    L('· 全通即得限定称号「' + fest.name + '」与专属成就', { s: 12 }),
-    L(''),
-    L('进度：' + cleared + '/3 关' + (allDone ? ' · 🎭 限定称号已收入！' : ''), { c: allDone ? '#6FE3D2' : '#9AA0C8' })
-  ]
-  for (let i = 0; i < ach.length; i++) {
-    const a = ach[i]
-    lines.push(L((a.unlocked ? '🏅 ' : '🔒 ') + a.name + '（' + a.desc + '）', { s: 11.5, c: a.unlocked ? '#FFD86E' : '#9AA0C8' }))
-  }
-  return new Modal(sm, {
-    title: fest.emoji + ' ' + fest.name + ' · 限时活动',
-    lines: lines,
-    buttons: [
-      { label: allDone ? '再刷一遍' : '继续挑战（' + (nextIdx + 1) + '/3）', primary: true, onTap: function () { startFn(Math.max(0, nextIdx)) } },
-      { label: '关闭' }
-    ],
-    onClose: onClose
-  })
-}
-
-/* ---------- 无尽地宫塔（N6） ---------- */
-
-function showEndless(sm, startFn, onClose) {
-  const st = storage.getStats()
-  const unlocked = endless.isUnlocked()
-  const spec1 = endless.floorSpec(1)
-  return new Modal(sm, {
-    title: '🗼 无尽地宫塔',
-    lines: [
-      L('主线 120 关全部制霸后开放的无限爬层模式。', { b: true, c: '#FFC15E' }),
-      L(''),
-      L('· 每层一小关，通过立即爬向下一层；失败则止步回塔底', { s: 12 }),
-      L('· 每 5 层换一区氛围（' + spec1.zone.emoji + ' ' + spec1.zone.name + ' 从第 1 层开始），难度逐层攀升', { s: 12 }),
-      L('· 每 10 层出现一个 Boss 限时追逐层', { s: 12 }),
-      L('· 同层布局固定——背版也是策略', { s: 12 }),
-      L(''),
-      unlocked
-        ? L('当前最深纪录：第 ' + (st.bestFloor || 0) + ' 层', { c: '#6FE3D2', b: true })
-        : L('🔒 尚未解锁：通关全部 120 关后开放', { c: '#9AA0C8' })
-    ],
-    buttons: unlocked
-      ? [
-          { label: (st.bestFloor ? '继续爬塔' : '进入无尽塔'), primary: true, onTap: function () { startFn() } },
-          { label: '关闭' }
-        ]
-      : [{ label: '关闭' }],
-    onClose: onClose
-  })
-}
-
-/* ---------- 轮回 NG+（全通后周目入口） ---------- */
-
-function showNgPlus(sm, onEnter) {
-  const ng = ngplus.info()
-  const nextCycle = ng.cycle + 1
-  const modNames = ngplus.modsFor(nextCycle).map(function (mk) {
-    for (let i = 0; i < weekly.MODS.length; i++) if (weekly.MODS[i].key === mk) return weekly.MODS[i].name
-    return mk
-  }).join('+') || '无'
-  const btnLabel = ng.cycle === 0
-    ? '⟳ 开启轮回 · 第 1 周目'
-    : '⟳ 进入第 ' + nextCycle + ' 周目'
-  return new Modal(sm, {
-    title: '轮回再临',
-    lines: [
-      L('120 关全部通关——地宫在轮回中苏醒，一切都变得更强。', { b: true, c: '#E36BFF' }),
-      L(''),
-      L('第 ' + nextCycle + ' 周目强化：' + modNames, { s: 12 }),
-      L('光尘收益 ×' + ngplus.dustMul(nextCycle) + '（周目越深加成越高，最高 ×2）', { s: 12, c: '#6FE3D2' }),
-      L(ng.cycle === 0 ? '首次开启获得限定称号「轮回行者」' : '进入新周目获得碎片 ×' + ng.shardReward, { s: 12, c: '#FFB46E' }),
-      L('关卡从第 1 关重新开始，主线星数与收集保留。', { s: 11, c: '#9AA0C8' })
-    ],
-    buttons: [
-      { label: btnLabel, primary: true, onTap: function () { onEnter() } },
-      { label: '再想想' }
-    ]
-  })
-}
-
-/* ---------- 怪物/道具图鉴（遭遇即收录，收集里程碑） ---------- */
-
 function showCodex(sm, onClose) {
   const prog = codex.progress(function () { return storage.getCodex() })
   const cx = storage.getCodex()
@@ -904,8 +777,6 @@ function showCodex(sm, onClose) {
   })
 }
 
-/* ---------- 每日签到（连续签到里程碑） ---------- */
-
 function showCheckin(sm, onClose) {
   const inf = checkin.info()
   // 里程碑行：已领 → check 图标 + 绿 tag；未达成 → lock + 灰 tag + 还差 N 天
@@ -959,222 +830,7 @@ function showCheckin(sm, onClose) {
   })
 }
 
-/* ---------- 每日挑战 ---------- */
-
-function showDaily(sm, startFn, onClose) {
-  const key = storage.dailyKey()
-  const rec = storage.getDaily()[key]
-  const st = storage.getStats()
-  const done = Object.keys((storage.getProgress().completed || {})).length
-  return new Modal(sm, {
-    title: '每日挑战',
-    lines: [
-      L('今日布局：' + key, { b: true, c: '#FFC15E' }),
-      L('全服同一迷宫（按日期种子生成），每日 0 点刷新。', { s: 12 }),
-      L(''),
-      rec
-        ? L('今日最佳：' + rec.gems + '✦ · ' + rec.steps + ' 步 · ' + rec.time + 's', { c: '#6FE3D2' })
-        : L('今日尚未挑战'),
-      // 原「排行榜」下线后，成绩与进度就近展示在每日挑战入口
-      L('历史最佳 ' + (st.bestDaily && st.bestDaily.gems ? st.bestDaily.gems + '✦' : '—') + ' · 通关 ' + done + '/' + storage.TOTAL, { s: 11, c: '#9AA0C8' }),
-      L('完成即得光尘（首次全额，破纪录有加成）。', { s: 12 })
-    ],
-    buttons: [
-      { label: '开始挑战', primary: true, onTap: function () { startFn() } },
-      { label: '关闭' }
-    ],
-    onClose: onClose
-  })
-}
-
-/* ---------- 周挑战 ---------- */
-
-function showWeekly(sm, startFn, onClose) {
-  const plan = weekly.getPlan()
-  const prog = weekly.weekProgress()
-  let next = -1
-  for (let i = 0; i < plan.length; i++) { if (!plan[i].done) { next = i; break } }
-  const rows = []
-  for (let i = 0; i < plan.length; i++) {
-    ;(function (i) {
-      const p = plan[i]
-      const names = p.mods.map(function (mk) {
-        for (let j = 0; j < weekly.MODS.length; j++) if (weekly.MODS[j].key === mk) return weekly.MODS[j].name
-        return mk
-      }).join('+') || '无'
-      rows.push({
-        ick: p.done ? 'check' : (i === next ? 'sword' : 'lock'),
-        icCol: p.done ? '#6FE3D2' : (i === next ? '#FFC15E' : '#9AA0C8'),
-        title: '第 ' + (i + 1) + ' 关 · ' + p.level + ' 关模板',
-        sub: '词缀：' + names,
-        tag: p.done ? '已完成' : (i === next ? '可挑战' : '依次解锁'),
-        tagColor: p.done ? '#6FE3D2' : (i === next ? '#FFC15E' : '#9AA0C8'),
-        dim: p.done || (i !== next),
-        onTap: function () {
-          if (i === next) startFn(i, p)
-          else if (!p.done) sm.toast('先完成第 ' + (next + 1) + ' 关')
-        }
-      })
-    })(i)
-  }
-  const canStart = next >= 0 && next < 5
-  const wk = weekly.weekKey()
-  const allDone = prog.done >= 5
-  const claimed = storage.weeklyRewardClaimed(wk)
-  const btns = []
-  if (allDone && !claimed) {
-    // 周奖励（E1）：5 关全完成 → 一次性领取 +30✦ 与限定称号
-    btns.push({
-      label: '领取周奖励 +30✦', primary: true,
-      onTap: function () {
-        const dust = storage.claimWeeklyReward(wk)
-        if (dust > 0) {
-          sm.toast('周奖励 +' + dust + '✦ · 获得称号「本周行者」')
-          sm.sceneModal(showWeekly(sm, startFn, onClose))
-        }
-      }
-    })
-  } else if (canStart) {
-    btns.push({ label: '挑战第 ' + (next + 1) + ' 关', primary: true, onTap: function () { startFn(next, plan[next]) } })
-  } else {
-    btns.push({ label: claimed ? '本周已完成 · 奖励已领' : '本周已完成', primary: false, onTap: null })
-  }
-  btns.push({ label: '关闭' })
-  const claimLine = claimed
-    ? L('限定称号「本周行者」已获得', { c: '#6FE3D2', s: 11.5 })
-    : (allDone ? L('周奖励待领取：+30✦ 与称号「本周行者」', { c: '#FFD86E', b: true, s: 11.5 }) : L('完成本周全部 5 关可领周奖励 +30✦', { s: 11.5, c: '#9AA0C8' }))
-  return new Modal(sm, {
-    title: '周挑战',
-    lines: [
-      L('本周 ' + weekly.weekKey() + ' · 进度 ' + prog.done + '/5 · 周一 0 点刷新', { b: true, c: '#FFC15E', s: 12.5 }),
-      L('5 个词缀关卡，全服同一布局，按顺序挑战。', { s: 11.5, c: '#9AA0C8' }),
-      claimLine
-    ],
-    rows: rows,
-    buttons: btns,
-    onClose: onClose
-  })
-}
-
-/* ---------- 挑战码 ---------- */
-
-function showCode(sm, startFn, onClose) {
-  const T = challenge.TEMPLATES
-  // 会话内稳定种子：选模板/词缀时口令前缀不变
-  const state = { tpl: 0, mods: [], seed: Math.floor(Math.random() * 0xFFF) }
-  const build = function (existing) {
-    const rows = []
-    rows.push({ header: '模板' })
-    T.forEach(function (t, i) {
-      rows.push({
-        ick: ['shield', 'sword', 'crown'][i] || 'sword',
-        icCol: ['#6FE3D2', '#FF7A92', '#FFD86E'][i] || '#FFC15E',
-        title: t.name,
-        sub: '固定种子布局，全服一致',
-        tag: state.tpl === i ? '✓ 已选' : '选择',
-        tagColor: state.tpl === i ? '#FFC15E' : '#9AA0C8',
-        dim: state.tpl === i,
-        onTap: function (m) { state.tpl = i; build(m) }
-      })
-    })
-    rows.push({ header: '词缀 · 点选叠加' })
-    weekly.MODS.forEach(function (mod) {
-      const on = state.mods.indexOf(mod.key) !== -1
-      rows.push({
-        ick: on ? 'check' : 'plus',
-        icCol: on ? '#6FE3D2' : '#9AA0C8',
-        title: mod.name + ' · ' + mod.desc,
-        sub: on ? '点击移除' : '提高难度，通关更刺激',
-        tag: on ? '已添加' : '添加',
-        tagColor: on ? '#6FE3D2' : '#9AA0C8',
-        dim: false,
-        onTap: function (m) {
-          if (on) state.mods = state.mods.filter(function (k) { return k !== mod.key })
-          else state.mods.push(mod.key)
-          build(m)
-        }
-      })
-    })
-    const code = challenge.encode(state.tpl, state.mods, state.seed)
-    // 口令历史（E2）：最近 5 条，点按查看重玩/删除
-    const hist = storage.getCodeHist()
-    if (hist.length) {
-      rows.push({ header: '口令历史 · 最近 5 条' })
-      hist.forEach(function (c) {
-        const dec = challenge.decode(c)
-        let sub = '口令已失效'
-        if (dec) {
-          const tpl = challenge.TEMPLATES.find(function (t) { return t.level === dec.level })
-          sub = (tpl ? tpl.name : '第 ' + dec.level + ' 关') + (dec.mods.length ? ' · 词缀×' + dec.mods.length : '')
-        }
-        rows.push({
-          ick: 'key',
-          icCol: '#FFD86E',
-          title: c,
-          sub: sub,
-          tag: '重玩 ›',
-          tagColor: '#6FE3D2',
-          dim: !dec,
-          onTap: function () {
-            if (!dec) return
-            sm.sceneModal(codeHistoryDetail(sm, startFn, c, dec, function () { sm.sceneModal(build()) }))
-          }
-        })
-      })
-    }
-    const opts = {
-      title: '挑战码',
-      lines: [
-        L('把口令发给好友，对方点「粘贴口令」进入同一关卡；回首页也会自动识别剪贴板。', { s: 11, c: '#9AA0C8' }),
-        { t: code, b: true, s: 21, c: '#FFC15E', ac: 'center', gap: true }
-      ],
-      rows: rows,
-      buttons: [
-        { label: '复制口令', primary: true, onTap: function () {
-          copyText(code, sm)
-          storage.addCodeHist(code)
-        } },
-        { label: '粘贴口令', onTap: function () { pasteCode(sm, startFn) } },
-        { label: '关闭' }
-      ],
-      onClose: onClose
-    }
-    // 选模板/词缀：就地刷新（不重播入场动画、保留滚动位置）
-    if (existing) return existing.refresh(opts)
-    return new Modal(sm, opts)
-  }
-  return build()
-}
-
-// 口令成功进入统一入口：记历史 + 携带口令原文（本口令最佳纪录用）
-function goCode(sm, startFn, raw) {
-  const dec = challenge.decode(raw)
-  if (!dec) return false
-  const code = String(raw).trim().toUpperCase()
-  storage.addCodeHist(code)
-  dec.code = code
-  startFn(dec)
-  return true
-}
-
-// 口令历史条目详情：重玩 / 删除
-function codeHistoryDetail(sm, startFn, code, dec, back) {
-  return new Modal(sm, {
-    title: '口令 ' + code,
-    lines: [
-      L('模板：第 ' + dec.level + ' 关 · 词缀 ' + (dec.mods.length ? dec.mods.join('、') : '无'), { s: 12, c: '#FFC15E' }),
-      L('开始挑战后自动记录本口令最佳用时。', { s: 11, c: '#9AA0C8' })
-    ],
-    buttons: [
-      { label: '重玩', primary: true, onTap: function () { back(); goCode(sm, startFn, code) } },
-      { label: '删除', onTap: function () { storage.removeCodeHist(code); back(); sm.toast('已从历史移除') } },
-      { label: '返回', onTap: function () { back() } }
-    ]
-  })
-}
-
-/* ---------- 旅人手记（N10） ---------- */
-
+/* ---------- 旅人手记（历史陈列，随图鉴保留） ---------- */
 const JOURNAL_ZONES = ['入门森林', '迷雾峡谷', '流光回廊', '熔岩深渊', '星海之巅', '虚空回响']
 
 function showJournal(sm, onClose) {
@@ -1224,87 +880,15 @@ function journalDetail(sm, j, back) {
   })
 }
 
-function copyText(text, sm) {
-  // 复制必须给确定反馈（反馈：toast 说复制了但输入框里看不到）
-  // 真机偶发 setClipboardData fail（errMsg 无明确原因），fail 时自动降级：
-  // 弹 editable showModal 预填口令，用户长按文本即可唤起系统复制菜单
-  const code = String(text || '')
-  try {
-    wx.setClipboardData({
-      data: code,
-      success: function () { if (sm) sm.toast('口令已复制 ✓') },
-      fail: function (err) {
-        console.error('setClipboardData fail:', err && err.errMsg)
-        if (!sm) return
-        sm.toast('自动复制失败，长按口令手动复制')
-        try {
-          wx.showModal({
-            title: '长按口令复制',
-            content: code,
-            editable: true,
-            showCancel: false,
-            confirmText: '完成',
-            placeholderText: '长按选中上方口令 → 复制'
-          })
-        } catch (e2) {}
-      }
-    })
-  } catch (e) {
-    console.error('setClipboardData throw:', e && e.message)
-    if (sm) sm.toast('复制失败，长按口令手动复制')
-  }
-}
-
-function pasteCode(sm, startFn) {
-  try {
-    wx.getClipboardData({
-      success: function (res) {
-        const clip = (res.data || '').trim()
-        if (goCode(sm, startFn, clip)) return
-        // 剪贴板无有效口令：预填进输入框，用户能看到「粘贴」结果并可编辑（反馈：输入框无法显示粘贴）
-        manualInput(sm, startFn, clip)
-      },
-      fail: function () { manualInput(sm, startFn, '') }
-    })
-  } catch (e) {
-    manualInput(sm, startFn, '')
-  }
-}
-
-// 手动输入兜底（剪贴板读取失败/无效时）：editable showModal，prefill 为剪贴板内容预填
-function manualInput(sm, startFn, prefill) {
-  try {
-    wx.showModal({
-      title: '输入挑战口令',
-      content: prefill || '',
-      editable: true,
-      placeholderText: prefill ? '以上内容来自剪贴板，可修改后确认' : '粘贴或输入 MZ 开头的 9 位口令',
-      success: function (res) {
-        if (!res.confirm) return
-        if (!goCode(sm, startFn, res.content || '')) { sm.toast('口令无效：应为 MZ 开头的 9 位码'); return }
-      }
-    })
-  } catch (e) {
-    sm.toast('当前环境不支持输入口令')
-  }
-}
-
 module.exports = {
   showSupply: showSupply,
-  showFestival: showFestival,
-  showEndless: showEndless,
   showSkin: showSkin,
   shardGuide: shardGuide,
   showSettings: showSettings,
   showAch: showAch,
   showSeason: showSeason,
   showIntro: showIntro,
-  showDaily: showDaily,
   showCheckin: showCheckin,
   showCodex: showCodex,
-  showNgPlus: showNgPlus,
-  showWeekly: showWeekly,
-  showCode: showCode,
-  showJournal: showJournal,
-  pasteCode: pasteCode
+  showJournal: showJournal
 }

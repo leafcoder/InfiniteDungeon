@@ -6,7 +6,6 @@
  */
 const SceneManager = require('./scene/SceneManager')
 const HomeScene = require('./scene/HomeScene')
-const GameScene = require('./scene/GameScene')
 const TowerScene = require('./scene/TowerScene')
 const fx = require('./ui/fx')
 
@@ -37,11 +36,9 @@ function boot() {
   if (!cap || !cap.height) cap = { top: sm.sat + 4, bottom: sm.sat + 40, left: W - 94, right: W - 7, width: 87, height: 32 }
   sm.cap = cap
   sm.capB = cap.bottom + 6                                     // 右上控件的安全起始 y
+  // v1.4 硬删除：只注册首页与塔防两个场景，迷宫场景已不存在、也不可回退。
   sm.register('home', new HomeScene(sm))
-  sm.register('game', new GameScene(sm))
   sm.register('tower', new TowerScene(sm))
-  // v1.4 P1.5：首页仍作为 hub，但主 CTA 与所有玩法入口已指向塔防。
-  // 迷宫场景 game 保留注册，供 core/mode.js 的软切换回退使用（默认不可达）。
   sm.switch('home')
 
   // 触摸事件 → 当前场景（小游戏坐标即逻辑像素，无需换算）

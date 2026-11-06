@@ -1,12 +1,12 @@
 /**
  * 地宫守卫 · 塔防核心算法（P1）
  * - 纯算法层：无 wx 依赖，可在 node 里直接 require 做回归
- * - 地图复用 maze.generateMaze，路径复用 maze.bfsPath；塔建在墙格不占路，
- *   因此 BFS 路径一次算完全波恒定，无需每帧重算
+ * - 地图与路径由独立模块 core/mapgen.js 提供（v1.4 硬删除后已与迷宫玩法解耦）；
+ *   塔建在墙格不占路，因此 BFS 路径一次算完全波恒定，无需每帧重算
  * - 出生点→核心 BFS 距离限定 20~28 格（用户拍板），保证单波约 10~17 秒
  * - 状态机：prep（布防 8s）→ wave（实时）→ interlude（三选一赐福）→ over
  */
-const maze = require('./maze')
+const mapgen = require('./mapgen')
 
 /* ============ 确定性随机 ============ */
 function mulberry32(a) {
@@ -147,7 +147,7 @@ TowerCore.prototype.drain = function () {
 
 /* ============ 建图：路径 + 合法塔位 ============ */
 TowerCore.prototype.buildMap = function () {
-  const m = maze.generateMaze(30, this.aspect, this.seed)
+  const m = mapgen.generateMaze(30, this.aspect, this.seed)
   this.grid = m.grid
   this.W = m.W
   this.H = m.H
@@ -180,7 +180,7 @@ TowerCore.prototype.buildMap = function () {
   }
   this.corePos = cands[Math.floor(this.rng() * cands.length)]
 
-  const tail = maze.bfsPath(this.grid, this.start, this.corePos) || []
+  const tail = mapgen.bfsPath(this.grid, this.start, this.corePos) || []
   this.path = [this.start].concat(tail)
   this.pathLen = this.path.length - 1
   this.pathDist = dist[this.corePos.y][this.corePos.x]

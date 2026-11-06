@@ -1,28 +1,25 @@
 /**
- * 埋点上报抽象层（v1.11 批次20）
- * - 业务侧统一调用 track(event, payload)，与具体后端完全解耦
- * - 默认无 transport：事件写入本地环形缓冲（上限 50），零网络请求、零副作用
- * - 后端就绪后只需 setTransport(fn) 或 configure({endpoint})，业务侧无需改动
- * - 后端不可用（transport 返回 false / 抛错）→ 事件保留在缓冲，下次自动重试
- * - 隐私红线：payload 仅接受 number / boolean / 短 string，绝不采集 openid、昵称、位置等
- * - 与既有 task.track（本机任务漏斗）并存：漏斗仍由 storage.incTaskTrack 记录，互不干扰
+ * 本机事件日志（v1.4 纯单机版）
+ *
+ * - 用户已确认「暂不接后端，只做单机游戏」，因此本模块**不具备任何网络上报能力**：
+ *   没有 transport、没有 endpoint、没有 wx.request，也没有配置入口。
+ * - track(event, payload) 只把事件写进本机 wx.setStorageSync 环形缓冲（上限 50 条），
+ *   供本机漏斗观察（如设置页 / 无头测试读取 summary）。数据永不出端。
+ * - 隐私红线：payload 仅接受 number / boolean / 短 string，绝不采集 openid、昵称、位置等。
+ * - 与既有 task.track（本机任务漏斗）并存：漏斗仍由 storage.incTaskTrack 记录，互不干扰。
+ *
+ * 历史：v1.3 曾有 configure({endpoint}) / setTransport / flush 三个「后端就绪后再接」的桩，
+ * 但业务侧从未调用。v1.4 确认纯单机后整体移除，避免留下一行看似可开关的联网代码。
  */
 const ANALYTICS_KEY = 'maze_analytics_v1'
 const MAX_BUFFER = 50
 
-// 业务事件白名单：新增事件先登记，防止拼写漂移
+// 业务事件白名单：新增事件先登记，防止拼写漂移。仅保留塔防与已迁入的外围系统事件。
 const TRACK_EVENTS = [
-  'level_win', 'level_fail', 'daily_win', 'weekly_win', 'festival_win',
-  'endless_depth', 'ach_unlock', 'season_claim', 'checkin',
-  'mutation_win', 'ngplus_enter', 'intro_seen', 'td_start', 'td_end',
-  // P1.5 塔防默认模式：波数结算与赐福选择（默认零网络请求，仅本机环形缓冲）
-  'td_wave', 'td_bless'
+  'ach_unlock', 'season_claim', 'checkin', 'intro_seen',
+  'td_start', 'td_end', 'td_wave', 'td_bless'
 ]
 
-let transport = null
-let endpoint = ''
-let lastError = ''
-let sentTotal = 0
 let enabled = true
 
 function loadBuffer() {
@@ -52,47 +49,8 @@ function sanitize(p) {
   return out
 }
 
-function setTransport(fn) {
-  transport = (typeof fn === 'function') ? fn : null
-  return transport
-}
 function setEnabled(v) { enabled = !!v }
 function isEnabled() { return enabled }
-
-// 接入后端：显式 transport，或给 endpoint 走内置 wx.request（fire-and-forget）
-function configure(opts) {
-  opts = opts || {}
-  endpoint = opts.endpoint || ''
-  if (typeof opts.transport === 'function') {
-    transport = opts.transport
-  } else if (endpoint && typeof wx !== 'undefined' && typeof wx.request === 'function') {
-    transport = function (records) {
-      try {
-        wx.request({ url: endpoint, method: 'POST', data: { events: records }, fail: function () {} })
-        return true
-      } catch (e) { return false }
-    }
-  }
-  return summary()
-}
-
-// 尝试把缓冲投递给后端；成功则清空缓冲，失败则保留待下次重试
-function flush() {
-  if (!transport || !enabled) return false
-  const buf = loadBuffer()
-  if (buf.length === 0) return true
-  lastError = ''
-  let ok = false
-  try { ok = transport(buf) !== false }
-  catch (e) { lastError = String((e && e.message) || e); ok = false }
-  if (ok) {
-    saveBuffer([])
-    sentTotal += buf.length
-    return true
-  }
-  if (!lastError) lastError = 'transport returned false'
-  return false
-}
 
 function track(event, payload) {
   if (!enabled) return { queued: 0, reason: 'disabled' }
@@ -101,7 +59,6 @@ function track(event, payload) {
   buf.push({ e: event, t: Date.now(), p: sanitize(payload) })
   while (buf.length > MAX_BUFFER) buf.shift()
   saveBuffer(buf)
-  if (transport) flush()
   return { queued: loadBuffer().length }
 }
 
@@ -111,34 +68,21 @@ function summary() {
   for (let i = 0; i < buf.length; i++) byEvent[buf[i].e] = (byEvent[buf[i].e] || 0) + 1
   return {
     buffered: buf.length,
-    sent: sentTotal,
     byEvent: byEvent,
-    hasTransport: !!transport,
-    endpoint: endpoint,
-    lastError: lastError,
     enabled: enabled
   }
 }
 
-function clear() {
-  saveBuffer([])
-  sentTotal = 0
-  lastError = ''
-}
+function clear() { saveBuffer([]) }
 
-// 测试 / 换环境用：清空内存态 transport 与配置并清缓冲
+// 测试 / 换环境用：清空本机缓冲并复位开关
 function reset() {
-  transport = null
-  endpoint = ''
-  lastError = ''
-  sentTotal = 0
   enabled = true
   saveBuffer([])
 }
 
 module.exports = {
   ANALYTICS_KEY: ANALYTICS_KEY, MAX_BUFFER: MAX_BUFFER, TRACK_EVENTS: TRACK_EVENTS,
-  track: track, flush: flush, configure: configure, setTransport: setTransport,
-  setEnabled: setEnabled, isEnabled: isEnabled,
+  track: track, setEnabled: setEnabled, isEnabled: isEnabled,
   summary: summary, clear: clear, reset: reset, loadBuffer: loadBuffer
 }

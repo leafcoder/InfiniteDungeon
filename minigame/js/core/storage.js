@@ -1109,17 +1109,7 @@ function markStorySeen(id) {
   } catch (e) {}
 }
 
-/* ============ 微信云存储打点（好友排行预留，小程序仅 KVS 可用） ============ */
-function reportScoreKV(level, time) {
-  try {
-    if (!wx.setUserCloudStorage) return;
-    wx.setUserCloudStorage({
-      KVDataList: [{ key: 'maze_best_L' + level, value: JSON.stringify({ t: Math.round(time * 10) / 10, ts: Date.now() }) }],
-      success: function () {},
-      fail: function () {}
-    });
-  } catch (e) {}
-}
+/* 微信托管数据 reportScoreKV 已移除：v1.4 确认纯单机，成绩永不出端 */
 
 // —— 通用一次性标志（教程已读等） ——
 const FLAG_KEY = 'maze_flags_v1';
@@ -1291,7 +1281,6 @@ module.exports = {
   saveGhost: saveGhost,
   isStorySeen: isStorySeen,
   markStorySeen: markStorySeen,
-  reportScoreKV: reportScoreKV,
   getTrial: getTrial,
   setTrial: setTrial,
   clearTrial: clearTrial,

@@ -46,7 +46,7 @@ function hasTaskRow(m) {
   const m0 = Modals.showSettings(sm, function () {});
   T('有埋点数据也不显示「任务数据（本机）」行', hasTaskRow(m0) === false);
   T('不再显示「埋点上报」状态行', !m0.rows.some(r => (r.title || '').indexOf('埋点上报') >= 0));
-  T('挑战码已收进设置二级页', !!m0.rows.filter(function (r) { return r.title === '挑战码'; })[0]);
+  T('挑战码入口已随迷宫玩法下线', !m0.rows.some(r => (r.title || '').indexOf('挑战码') >= 0));
 
   console.log('--- 4. 数据层仍在工作（只是不再展示）---');
   T('任务漏斗计数未被删除', task.trackSummary().total > 0);

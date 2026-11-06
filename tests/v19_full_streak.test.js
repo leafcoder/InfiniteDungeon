@@ -142,9 +142,9 @@ function makeSM() {
   T('done 不变 → 非达成', task.justCompleted({ done: 2 }, { done: 2 }) === false);
   T('领取不改变 done → 非达成', task.justCompleted({ done: 2, claimed: 1 }, { done: 2, claimed: 2 }) === false);
   T('缺参兜底', task.justCompleted(null, { done: 1 }) === false && task.justCompleted({ done: 1 }, null) === false);
-  const src = fs.readFileSync(path.join(__dirname, '../minigame/js/scene/GameScene.js'), 'utf8');
-  T('结算接线：before/after 快照', src.indexOf('briefBefore') >= 0 && src.indexOf('briefAfter') >= 0);
-  T('结算接线：调用 justCompleted 并给达成文案', src.indexOf('task.justCompleted(briefBefore, briefAfter)') >= 0 && src.indexOf('🎉 任务达成！') >= 0);
+  const src = fs.readFileSync(path.join(__dirname, '../minigame/js/scene/TowerScene.js'), 'utf8');
+  T('结算接线：before/after 快照', src.indexOf('briefBefore') >= 0 && src.indexOf('task.dailyBrief()') >= 0);
+  T('结算接线：调用 justCompleted', src.indexOf('task.justCompleted(briefBefore') >= 0);
 
   console.log('\n通过 ' + passed + ' / 失败 ' + failed);
   if (failed > 0) process.exit(1);

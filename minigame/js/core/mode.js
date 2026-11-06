@@ -1,18 +1,14 @@
 /**
- * 玩法模式软切换（v1.4 P1.5）
+ * 玩法与波数结算口径（v1.4 硬删除后）
  *
- * - 默认 MAZE_ENABLED=false：迷宫探索玩法的所有入口下线，塔防「地宫守卫」是唯一默认玩法。
- * - GameScene / play.js / maze.js 等迷宫代码【全部保留】，只是不再注册为可达路径；
- *   setMazeEnabled(true) 即可完整回退（含旧入口与旧分发），34 个既有测试据此继续验证旧行为。
- * - 注意：maze.js 不能删。core/tower.js 依赖它的 generateMaze / bfsPath 生成敌人通道图，
- *   maze.js 在此版本降级为「塔防专用地图生成器」。
+ * - 唯一玩法是塔防「地宫守卫」。迷宫玩法层已从仓库物理删除，
+ *   main.js 只注册 home / tower 两个场景，**不再提供任何回退开关**。
+ * - core/mapgen.js 是塔防专用的通道图生成器，独立于已删除的 core/maze.js。
  *
  * WAVE_RULES 是波数结算口径的单一事实来源，与规格文档第 14.5 节一一对应。
- * 所有系数均为首版草案，需由埋点数据收敛，禁止在业务代码里另写魔法数字。
+ * 所有系数均为首版草案，需由本机埋点数据收敛，禁止在业务代码里另写魔法数字。
  */
-let MAZE_ENABLED = false
 
-// 波数结算口径（详见规格 14.5）
 const WAVE_RULES = {
   dustPerTwoWaves: 3,      // dust = floor(reached / 2) * 3
   xpBase: 10,              // 每局基础赛季 XP，避免 0 波时零收益
@@ -23,14 +19,10 @@ const WAVE_RULES = {
   achIds: ['td5', 'td10', 'td20']
 }
 
-// 塔防默认模式下，首页 DOCK 仍保留的可见项（其余迷宫玩法入口仅隐藏，不删除数据结构）
+// 首页 DOCK 保留的可见项（布局结构仍保留 6 项，其余按 hidden 过滤不绘制、不命中）
 const TOWER_DOCK_KEYS = ['supply', 'survival', 'task']
 
-function isMazeEnabled() { return MAZE_ENABLED }
-function setMazeEnabled(v) { MAZE_ENABLED = !!v }
-function isTowerDefault() { return !MAZE_ENABLED }
-
-// 赛季 XP：基础 + 波数线性（封顶），破纪录额外奖励复用 season.onDepth 的既有判重
+// 赛季 XP：基础 + 波数线性（封顶）
 function seasonXpFor(reached) {
   const w = Math.max(0, Math.min(reached || 0, WAVE_RULES.xpWaveCap))
   return WAVE_RULES.xpBase + WAVE_RULES.xpPerWave * w
@@ -54,10 +46,7 @@ function achFor(reached) {
 module.exports = {
   WAVE_RULES: WAVE_RULES,
   TOWER_DOCK_KEYS: TOWER_DOCK_KEYS,
-  isMazeEnabled: isMazeEnabled,
-  setMazeEnabled: setMazeEnabled,
-  isTowerDefault: isTowerDefault,
   seasonXpFor: seasonXpFor,
   dustFor: dustFor,
   achFor: achFor
-}
+};

@@ -1,5 +1,5 @@
-// v1.4 P1.5 软切换回归：删除迷宫玩法 / 默认塔防 / 波数结算 / 可逆回退
-// 约束：迷宫代码全部保留（不物理删除），34 个既有测试零改动全绿
+// v1.4 硬删除回归：默认塔防 / 波数结算 / 外围系统接线（不再验证可逆回退，见 v37）
+// 约束：迷宫玩法层已物理删除，main.js 只注册 home / tower 两个场景
 const path = require('path');
 const fs = require('fs');
 const ROOT = '/home/zhanglei3/WorkBuddy/2026-10-26-14-05-57/MazeGame/minigame/js';
@@ -43,13 +43,9 @@ function freshHome() {
 }
 function src(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
 
-console.log('--- 1. 软切换开关与波数口径纯函数 ---');
-T('默认迷宫不可达', mode.isMazeEnabled() === false);
-T('默认塔防生效', mode.isTowerDefault() === true);
-mode.setMazeEnabled(true);
-T('开关可回退到迷宫', mode.isMazeEnabled() === true && mode.isTowerDefault() === false);
-mode.setMazeEnabled(false);
-T('开关可再切回塔防', mode.isTowerDefault() === true);
+console.log('--- 1. 无回退开关 + 波数口径纯函数 ---');
+T('mode.js 不再导出回退开关', typeof mode.setMazeEnabled === 'undefined' && typeof mode.isMazeEnabled === 'undefined' && typeof mode.isTowerDefault === 'undefined');
+T('玩法常量仍收敛为单一事实来源', typeof mode.WAVE_RULES === 'object' && Array.isArray(mode.TOWER_DOCK_KEYS));
 
 const R = mode.WAVE_RULES;
 T('口径常量集中且封顶 20 波', R.xpBase === 10 && R.xpPerWave === 2 && R.xpWaveCap === 20 && R.recordXp === 30);
@@ -60,7 +56,7 @@ T('100 波不突破封顶', mode.seasonXpFor(100) === mode.seasonXpFor(20));
 T('成就 0/5/10/20 波', [0, 5, 10, 20].map(function (w) { return mode.achFor(w).length; }).join(',') === '0,1,2,3');
 T('可见 DOCK 白名单', mode.TOWER_DOCK_KEYS.join(',') === 'supply,survival,task');
 
-console.log('--- 2. 首页默认塔防（结构保留、入口下线） ---');
+console.log('--- 2. 首页默认塔防（结构保留、迷宫入口已删） ---');
 storage.resetProgress();
 storage.setTutorialSeen();
 const h1 = freshHome();
@@ -69,7 +65,7 @@ T('首页进入塔防模式', hs.towerMode === true);
 T('主 CTA 文案改为开始守卫', hs.goBtn.label === '▶ 开始守卫');
 T('主 CTA 副标题走波数口径', hs.goBtn.sub.indexOf('最佳') >= 0 && hs.goBtn.sub.indexOf('局') >= 0);
 T('主 CTA 固定守卫金不染轮回紫', hs.goBtn.fill === '#FFC15E');
-T('DOCK 仍保留 6 项结构（回退/回归依赖）', hs.dock.length === 6);
+T('DOCK 仍保留 6 项结构（像素回归依赖）', hs.dock.length === 6);
 const vis = hs.dock.filter(function (d) { return !d.hidden; });
 T('可见 DOCK 恰 3 项', vis.length === 3);
 T('可见项 key 正确', vis.map(function (d) { return d.key; }).join(',') === 'supply,survival,task');
@@ -101,26 +97,15 @@ T('塔防默认不绘制分区圆点', calls.dots === 0);
 T('塔防默认不绘制节日/异变横幅', calls.fest === 0 && calls.mut === 0);
 T('塔防默认绘制战绩卡与签到横幅', calls.board === 1 && calls.chk === 1);
 
-console.log('--- 3. 迷宫入口不可达 + 完整回退 ---');
-const h2 = freshHome();
-h2.hs._enterGame({ level: 1, mode: 'level' });
-T('残留迷宫入口被闸门改指塔防', h2.sm.switched.length === 1 && h2.sm.switched[0].name === 'tower');
-T('闸门给出下线提示', h2.sm.toasts.join('').indexOf('已下线') >= 0);
+console.log('--- 3. 迷宫入口已物理删除 ---');
 const h3 = freshHome();
 storage.setFlag('towerTut');
 h3.hs.goBtn.onTap();
 T('主 CTA 点击直接进入塔防场景', h3.sm.switched.length === 1 && h3.sm.switched[0].name === 'tower');
 const homeSrc = src('scene/HomeScene.js');
-T('HomeScene 里实际 switch(game) 只剩闸门一处', (homeSrc.match(/this\.sm\.switch\('game'/g) || []).length === 1);
-
-mode.setMazeEnabled(true);
-const h4 = freshHome();
-T('回退后首页切回迷宫模式', h4.hs.towerMode === false);
-T('回退后 CTA 恢复主线文案', h4.hs.goBtn.label === '▶ 继续冒险');
-T('回退后 DOCK 六项全部可见', h4.hs.dock.filter(function (d) { return !d.hidden; }).length === 6);
-h4.hs._enterGame({ level: 7, mode: 'level' });
-T('回退后闸门放行 GameScene 且参数不丢', h4.sm.switched[0].name === 'game' && h4.sm.switched[0].params.level === 7);
-mode.setMazeEnabled(false);
+T('HomeScene 不存在 _enterGame 闸门', typeof h3.hs._enterGame === 'undefined');
+T('HomeScene 无任何 switch(game) 调用', homeSrc.indexOf("this.sm.switch('game'") === -1);
+T('首页不再 require 已删模块', !/require\('\.\.\/core\/(maze|play|weekly|festival|mutation|challenge|endless|ngplus|mercy)'\)/.test(homeSrc));
 
 console.log('--- 4. 塔防结算串联外围系统（波数口径） ---');
 storage.resetProgress();
@@ -175,16 +160,11 @@ T('老存档通关数不回收', oldStat.clears >= 120);
 storage.resetProgress();
 T('resetProgress 清理三项塔防统计', storage.getStats().bestTowerWave === 0 && storage.getStats().towerRuns === 0 && storage.getStats().totalTowerWaves === 0);
 
-console.log('--- 6. 代码保留 / 规范约束 ---');
-T('maze.js 仍保留（塔防地图生成器，不可删）', fs.existsSync(path.join(ROOT, 'core/maze.js')));
-T('GameScene.js 仍保留（软切换可回退）', fs.existsSync(path.join(ROOT, 'scene/GameScene.js')));
-T('tower.js 仍依赖 maze 生成通道图', src('core/tower.js').indexOf("require('./maze')") >= 0);
+console.log('--- 6. 规范约束（硬删除相关断言见 v37） ---');
 T('main.js 仍注册 tower 场景', src('main.js').indexOf("sm.register('tower'") >= 0);
 T('埋点白名单含 td_wave / td_bless', analytics.TRACK_EVENTS.indexOf('td_wave') >= 0 && analytics.TRACK_EVENTS.indexOf('td_bless') >= 0);
-T('设置页挑战码行在塔防模式下不进迷宫', src('scene/Modals.js').indexOf("迷宫玩法已下线") >= 0);
-T('挑战码文案按模式动态', src('scene/Modals.js').indexOf('依赖迷宫关卡，当前已下线') >= 0);
 T('任务文案已重定义为波数口径', src('core/task.js').indexOf('本周最高守住波数') >= 0 && src('core/task.js').indexOf('当日完成守卫局数') >= 0);
 T('结算修掉 towers 数组拼接 bug', src('scene/TowerScene.js').indexOf("c.towers.length + ' 座'") >= 0);
 
-console.log('\n===== v36 软切换·默认塔防：' + pass + ' 通过 / ' + fail + ' 失败 =====');
+console.log('\n===== v36 硬删除·默认塔防：' + pass + ' 通过 / ' + fail + ' 失败 =====');
 if (fail > 0) process.exit(1);
