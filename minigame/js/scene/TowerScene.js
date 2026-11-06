@@ -10,6 +10,7 @@ const TOWER_DEFS = TowerCore.TOWER_DEFS
 const TOWER_ORDER = TowerCore.TOWER_ORDER
 const BLESSINGS = TowerCore.BLESSINGS
 const MAX_TOWERS = TowerCore.MAX_TOWERS
+const MAX_TOWER_LV = TowerCore.MAX_TOWER_LV
 const storage = require('../core/storage')
 const analytics = require('../core/analytics')
 const mode = require('../core/mode')
@@ -138,7 +139,7 @@ TowerScene.prototype.buildButtons = function () {
     const w3 = (W - pad * 2 - gap * 2) / 3
     const up = new Button({
       x: pad, y: y2, w: w3, h: 44 * u,
-      label: t.lv >= 3 ? '已满级' : '升级 ¥' + this.core.upgradeCost(t),
+      label: t.lv >= MAX_TOWER_LV ? '已满级' : '升级 ¥' + this.core.upgradeCost(t),
       fontSize: Math.round(12 * u), primary: true,
       onTap: function () { self.doUpgrade() }
     })
@@ -188,7 +189,7 @@ TowerScene.prototype.syncButtons = function () {
     } else if (b._kind === 'build') {
       b.disabled = !this.ghost || !this.ghost.ok || c.phase === 'over'
     } else if (b._kind === 'upgrade') {
-      b.disabled = !this.selTower || this.selTower.lv >= 3 || c.gold < c.upgradeCost(this.selTower)
+      b.disabled = !this.selTower || this.selTower.lv >= MAX_TOWER_LV || c.gold < c.upgradeCost(this.selTower)
     }
   }
 }
@@ -309,13 +310,31 @@ TowerScene.prototype.showBlessing = function (d) {
       }
     }
   })
+  // 金币出口：波间可反复锻造，价格指数递增；塔位/等级全满后仍能把溢出金币转成战力
+  const fc = this.core.forgeCost()
+  const forgeLabel = fc > 0 ? ('⚒ 锻造 ¥' + fc) : '⚒ 已满级'
   this.modal = new Modal(this.sm, {
     title: '第 ' + d.wave + ' 波守住！',
-    lines: [{ t: '波次奖励 +' + d.bonus + ' 金币 · 选一项地宫赐福（本局有效）', s: 12, c: COL.sub }],
+    lines: [
+      { t: '波次奖励 +' + d.bonus + ' 金币 · 选一项地宫赐福（本局有效）', s: 12, c: COL.sub },
+      { t: '⚒ 锻造：花金币使全体塔伤害 +8%，可重复、价格递增', s: 11, c: COL.gold },
+      { t: '当前锻造 ' + this.core.forgeLv + ' 级 · 伤害 ×' + this.core.damageMul().toFixed(2), s: 11, c: COL.sub }
+    ],
     rows: rows,
-    buttons: [{ label: '跳过', onTap: function (m) {
-      self.core.chooseBlessing(null); m.close(); self.modal = null
-    } }],
+    buttons: [
+      { label: forgeLabel, onTap: function () {
+        if (self.core.forge()) {
+          try { analytics.track('td_bless', { key: 'forge', wave: d.wave }) } catch (e) {}
+          // 重建弹窗刷新价格/等级；不关闭赐福流程，玩家仍可三选一
+          self.showBlessing(d)
+        } else {
+          self.showToast('金币不足或锻造已达上限')
+        }
+      } },
+      { label: '跳过', onTap: function (m) {
+        self.core.chooseBlessing(null); m.close(); self.modal = null
+      } }
+    ],
     onClose: function () { self.modal = null }
   })
 }
@@ -345,7 +364,7 @@ TowerScene.prototype.showResult = function () {
   try {
     analytics.track('td_end', {
       reached: reached, wave: c.wave, kills: c.kills, towers: c.towers.length,
-      dust: dust, xp: xp, isBest: isBest, achNew: achNew
+      forge: c.forgeLv, dust: dust, xp: xp, isBest: isBest, achNew: achNew
     })
   } catch (e) {}
 
@@ -357,6 +376,7 @@ TowerScene.prototype.showResult = function () {
     { t: '光尘 +' + dust + ' · 赛季 XP +' + xp + (isBest ? ' · 新纪录！' : ''), s: 12, c: COL.gold },
     { t: '本机最佳：' + Math.max(prevBest, reached) + ' 波', s: 12, c: COL.sub }
   ]
+  if (c.forgeLv > 0) lines.push({ t: '⚒ 锻造 ' + c.forgeLv + ' 级 · 最终伤害 ×' + c.damageMul().toFixed(2), s: 12, c: COL.gold })
   if (achNew > 0) lines.push({ t: '🏅 解锁 ' + achNew + ' 项守卫成就', s: 12, c: COL.gold })
   if (taskDone) lines.push({ t: '🎉 任务达成！', s: 12, c: '#6FE3D2' })
 

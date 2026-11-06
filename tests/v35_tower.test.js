@@ -64,26 +64,32 @@ T('HP 倍率第 1 波为 1', tower.waveHpMul(1) === 1);
 T('HP 倍率 30 波后进入深渊加速', tower.waveHpMul(31) - tower.waveHpMul(30) > 0.28);
 T('速度倍率封顶 1.5', tower.waveSpeedMul(99) === 1.5);
 T('出场间隔随波收紧', tower.waveSpawnGap(20) < tower.waveSpawnGap(1));
-T('出场间隔有下限 0.18', tower.waveSpawnGap(999) === 0.18);
-T('波次奖励 20+5n', tower.waveBonus(4) === 40);
+T('出场间隔有下限 spawnGapMin', tower.waveSpawnGap(999) === tower.WAVE_TUNING.spawnGapMin);
+T('波次奖励 bonusBase+bonusPerWave×n',
+  tower.waveBonus(4) === tower.WAVE_TUNING.bonusBase + tower.WAVE_TUNING.bonusPerWave * 4);
 T('4 塔 4 敌 6 赐福配置齐全', tower.TOWER_ORDER.length === 4 &&
   Object.keys(tower.ENEMY_DEFS).length === 4 && tower.BLESS_KEYS.length === 6);
 
 console.log('--- 3. 建塔 / 升级 / 出售 / 吸附 ---');
 const c2 = mk(1);
-T('初始金币 120 / 核心 20', c2.gold === 120 && c2.hp === 20);
+T('初始金币取 WAVE_TUNING.startGold / 核心 20',
+  c2.gold === tower.WAVE_TUNING.startGold && c2.hp === 20);
 const sl0 = c2.slots[0];
 T('canBuild 合法位置通过', c2.canBuild(sl0, 'arrow').ok);
 T('canBuild 拒绝未知塔种', !c2.canBuild(sl0, 'nope').ok);
 T('canBuild 拒绝路格', !c2.canBuild({ x: c2.start.x, y: c2.start.y }, 'arrow').ok);
-T('建造扣款 60', c2.build(sl0, 'arrow') && c2.gold === 60);
+T('建造按弩塔造价扣款',
+  c2.build(sl0, 'arrow') && c2.gold === tower.WAVE_TUNING.startGold - tower.TOWER_DEFS.arrow.cost);
 T('建造后事件入队', c2.drain().some(e => e.type === 'build'));
 T('同位重复建造被拒', !c2.build(sl0, 'arrow'));
 T('塔数上限 12', tower.MAX_TOWERS === 12);
 c2.gold = 100000;
 T('升级 Lv1→2 扣造价 0.8 倍', c2.upgrade(c2.towers[0]) && c2.towers[0].lv === 2);
 T('升级 Lv2→3', c2.upgrade(c2.towers[0]) && c2.towers[0].lv === 3);
-T('Lv3 封顶', !c2.upgrade(c2.towers[0]) && c2.towers[0].lv === 3);
+T('升级 Lv3→4', c2.upgrade(c2.towers[0]) && c2.towers[0].lv === 4);
+T('升级 Lv4→5', c2.upgrade(c2.towers[0]) && c2.towers[0].lv === 5);
+T('Lv5 封顶', !c2.upgrade(c2.towers[0]) && c2.towers[0].lv === 5);
+T('塔等级上限由 WAVE_TUNING 提供', tower.MAX_TOWER_LV === tower.WAVE_TUNING.maxTowerLv);
 const invested = c2.towers[0].invest;
 const goldBeforeSell = c2.gold;
 T('出售返还累计投入 60%', c2.sell(c2.towers[0]) && c2.gold === goldBeforeSell + Math.round(invested * 0.6));
@@ -99,7 +105,7 @@ console.log('--- 4. 波次、移动与战斗 ---');
 const c3 = mk(1);
 T('初始为 prep 阶段', c3.phase === 'prep');
 T('startNow 只在 prep 生效', c3.startNow() && !c3.startNow());
-T('提前开波奖励 +10 金币', c3.gold === 130);
+T('提前开波奖励 +10 金币', c3.gold === tower.WAVE_TUNING.startGold + 10);
 T('第 1 波生成队列长度 7', c3.spawnQueue.length === 7);
 const c4 = mk(1);
 for (let i = 0; i < 90; i++) c4.tick(0.1); // tick 会把 dt clamp 到 0.1，需逐帧累计
@@ -200,7 +206,7 @@ cs.phase = 'wave'; cs.wave = 2; cs.spawnQueue = []; cs.enemies = [];
 const gBefore = cs.gold;
 cs.checkWaveEnd();
 T('清空后进入 interlude', cs.phase === 'interlude');
-T('结算发放 20+5n 金币', cs.gold === gBefore + 30);
+T('结算发放 waveBonus(n) 金币', cs.gold === gBefore + tower.waveBonus(2));
 T('记录守住波数', cs.reached === 2);
 T('waveclear 事件带 offers', cs.drain().some(e => e.type === 'waveclear' && e.data.offers.length === 3));
 const cv = mk(1);

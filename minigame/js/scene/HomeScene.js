@@ -1,34 +1,31 @@
 /**
- * 首页场景（v1.4 单塔防版）
+ * 首页场景（v1.4 单塔防版 · v1.4 死代码清理后）
  * 信息架构：
  *   顶栏（Logo + 光尘胶囊 + 今日徽章；右侧图鉴 / 皮肤 / 设置 3 枚图标钮）
  *   → Hero 卡（地宫守卫 + 最佳波数进度）
  *   → 战绩卡（占据原关卡网格区域：最佳波数 / 累计局数 / 累计波数）
  *   → 悬浮主 CTA「开始守卫」→ 底部 Dock（补给 / 守卫 / 任务 3 项可见）
  *
- * 说明：迷宫玩法层已物理删除。DOCK / ZONES / gz / festRect 等布局结构与坐标计算
- * 全部保留以保证像素级回归；drawGrid / drawDots / drawFestBanner 等迷宫绘制函数
- * 已进入不可达状态（历史骨架，draw() 与触摸命中均不再触及它们）。
+ * 说明：迷宫玩法层已物理删除；v1.4.1 进一步清除了恒不可达的迷宫绘制 / 触摸骨架
+ * （drawGrid / drawDots / drawFestBanner / drawMutBanner / tapGrid / openUnlock 等）。
+ * 布局结构 DOCK / ZONES / gz / dotsRect / festRect / festBottom 及全部坐标计算保留，
+ * 因为既有测试对它们有精确像素断言；dotsRect 仍是 gz 锚点的回归基点。
  */
 const storage = require('../core/storage')
 const theme = require('../core/theme')
-const ad = require('../core/ad')
 const season = require('../core/season')
 const checkin = require('../core/checkin')
 const task = require('../core/task')
-const Icons = require('../ui/Icons')
+const Icons = require('../ui/Icons')   // drawChkBanner 仍用矢量 spark 图标
 const club = require('../ui/gameclub')
 const Modals = require('./Modals')
 const Modal = require('../ui/Modal')
-const AdSim = require('../ui/AdSim')
 const fx = require('../ui/fx')
 const Background = require('../ui/Background')
 const { Button, roundRect } = require('../ui/Button')
 const { drawIcon } = require('../ui/Icons')
 const ScrollView = require('../ui/ScrollView')
 const mode = require('../core/mode')
-
-const UNLOCK_DUST_COST = 30   // 光尘直接解锁价格（与小程序版一致）
 
 // 塔防默认模式下 Hero 卡的虚拟「分区」：只替换数据源，不动 drawHero 的任何绘制代码
 const TOWER_HERO_ZONE = { key: 'tower', name: '地宫守卫', emoji: '🛡', start: 1, end: 20 }
@@ -229,35 +226,9 @@ HomeScene.prototype.enter = function () {
   // 挑战码 / 口令识别已随迷宫玩法删除；纯单机不再读取剪贴板
 }
 
-HomeScene.prototype.zoneOf = function (lv) {
-  for (let i = 0; i < ZONES.length; i++) if (lv <= ZONES[i].end) return ZONES[i]
-  return ZONES[ZONES.length - 1]
-}
-
-HomeScene.prototype.zoneDoneCount = function (zi) {
-  const z = ZONES[zi]
-  let n = 0
-  for (let lv = z.start; lv <= z.end; lv++) if (this.completed[lv]) n++
-  return n
-}
-
-// 切换分区（dir 决定滑移方向）
-HomeScene.prototype.switchZone = function (idx, dir) {
-  idx = Math.max(0, Math.min(ZONES.length - 1, idx))
-  if (idx === this.activeZone) return
-  this.heroFrom = dir || (idx > this.activeZone ? 1 : -1)
-  this.activeZone = idx
-  this.gridSc.offset = 0
-  this.heroT = 0
-  fx.to(this, { heroT: 1 }, 340, { ease: 'easeOutCubic' })
-  this.gridAnim = 0
-  fx.to(this, { gridAnim: 1 }, 420, { ease: 'easeOutQuint' })
-  const done = this.zoneDoneCount(idx)
-  this.progT = done / 20
-  fx.to(this, { progT: done / 20 }, 500, { ease: 'easeOutCubic' })
-  const zx = this.hero.x + this.hero.w / 2
-  fx.burst(zx, this.hero.y + this.hero.h / 2, { n: 8, colors: [this.zoneColor(idx), '#FFFFFF'], speed: 80, size: 2.2, life: 0.4 })
-}
+// 分区切换 / 关卡解锁相关方法（zoneOf / zoneDoneCount / switchZone / refreshUnlock /
+// openUnlock / tapGrid / tapDots）已随迷宫玩法层一并清除：唯一玩法是塔防，
+// 首页不存在任何分区与关卡概念。ZONES 仅作 dotsRect 的计数与配色锚点保留。
 
 // 入口分发：唯一玩法是塔防，首页不存在任何 switch('game') 路径
 HomeScene.prototype.openEntry = function (key) {
@@ -309,100 +280,6 @@ HomeScene.prototype.openEntry = function (key) {
       self.taskBrief = task.dailyBrief() // 领奖/查看后刷新 Dock 进度
     })
   }
-}
-
-// 节日活动入口 / 命中已随迷宫玩法删除（festRect 恒为 null，仅保留布局锚点）
-
-// 节日限时活动横幅（N12）：Hero 卡正下方的全宽活动条，活动期间显示
-HomeScene.prototype.drawFestBanner = function (ctx, v) {
-  if (!this.fest || !this.festRect) return
-  const u = this.u
-  const e = this.ent(2)
-  if (e <= 0) return
-  const r = this.festRect
-  ctx.save()
-  ctx.globalAlpha = e
-  ctx.translate(0, (1 - e) * 10)
-  const pulse = 0.5 + 0.5 * fx.pulse(1600, 0)
-  // 卡底：暖橙玻璃 + 柔光
-  roundRect(ctx, r.x, r.y, r.w, r.h, 18 * u)
-  const bg = ctx.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h)
-  bg.addColorStop(0, 'rgba(255,138,61,' + (0.20 + 0.05 * pulse) + ')')
-  bg.addColorStop(1, 'rgba(255,210,63,' + (0.10 + 0.04 * pulse) + ')')
-  ctx.fillStyle = bg
-  ctx.fill()
-  ctx.lineWidth = 1
-  ctx.strokeStyle = 'rgba(255,210,63,' + (0.45 + 0.25 * pulse) + ')'
-  ctx.stroke()
-  // 左侧圆徽：有矢量图标用矢量（清晰稳定），否则退回系统 emoji
-  const cx = r.x + 26 * u
-  const cy = r.y + r.h / 2
-  ctx.beginPath()
-  ctx.arc(cx, cy, 15 * u, 0, Math.PI * 2)
-  ctx.fillStyle = 'rgba(255,225,170,0.16)'
-  ctx.fill()
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  if (this.fest.iconKey) {
-    Icons.drawIcon(ctx, this.fest.iconKey, cx, cy + 1, 17 * u, '#FF8A2A')
-  } else {
-    ctx.font = Math.round(17 * u) + 'px sans-serif'
-    ctx.fillText(this.fest.emoji, cx, cy + 1)
-  }
-  // 活动名 + 副语
-  ctx.textAlign = 'left'
-  ctx.fillStyle = '#FFE9A8'
-  ctx.font = 'bold ' + Math.round(14 * u) + 'px sans-serif'
-  ctx.fillText(this.fest.name + ' · 限时活动', r.x + 50 * u, r.y + r.h / 2 - 6 * u)
-  ctx.fillStyle = 'rgba(255,233,168,0.62)'
-  ctx.font = Math.round(9.5 * u) + 'px sans-serif'
-  ctx.fillText(this.fest.tagline, r.x + 50 * u, r.y + r.h / 2 + 9 * u)
-  // 右侧 CTA
-  ctx.textAlign = 'right'
-  ctx.fillStyle = 'rgba(255,233,168,' + (0.70 + 0.30 * pulse) + ')'
-  ctx.font = 'bold ' + Math.round(12.5 * u) + 'px sans-serif'
-  ctx.fillText('进入 ›', r.x + r.w - 16 * u, r.y + r.h / 2 + 1)
-  ctx.textBaseline = 'alphabetic'
-  ctx.restore()
-}
-
-// 地宫异变横幅：今日词缀 + 光尘补偿提示（纯展示，不可点；节日活动期间让位隐藏）
-HomeScene.prototype.drawMutBanner = function (ctx, v) {
-  if (!this.mutRect || !this.mut) return
-  const u = this.u
-  const e = this.ent(2)
-  if (e <= 0) return
-  const r = this.mutRect
-  ctx.save()
-  ctx.globalAlpha = e
-  ctx.translate(0, (1 - e) * 10)
-  const pulse = 0.5 + 0.5 * fx.pulse(1800, 0)
-  roundRect(ctx, r.x, r.y, r.w, r.h, 18 * u)
-  ctx.fillStyle = 'rgba(155,140,255,' + (0.14 + 0.05 * pulse) + ')'
-  ctx.fill()
-  ctx.lineWidth = 1
-  ctx.strokeStyle = this.mut.color
-  ctx.stroke()
-  // 左侧圆徽：四芒星矢量图标，异变主色
-  const cx = r.x + 26 * u
-  const cy = r.y + r.h / 2
-  ctx.beginPath()
-  ctx.arc(cx, cy, 15 * u, 0, Math.PI * 2)
-  ctx.fillStyle = 'rgba(200,190,255,0.18)'
-  ctx.fill()
-  Icons.drawIcon(ctx, 'spark', cx, cy + 1, 16 * u, this.mut.color)
-  // 异变名 + 补偿说明
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'middle'
-  ctx.fillStyle = '#DCD6FF'
-  ctx.font = 'bold ' + Math.round(14 * u) + 'px sans-serif'
-  ctx.fillText('⚗ ' + this.mut.name, r.x + 50 * u, r.y + r.h / 2 - 6 * u)
-  ctx.fillStyle = 'rgba(220,214,255,0.62)'
-  ctx.font = Math.round(9.5 * u) + 'px sans-serif'
-  const xpNote = season.mutationXp(this.mut)
-  ctx.fillText(this.mut.desc + (xpNote > 0 ? ' · 赛季XP+' + xpNote : ''), r.x + 50 * u, r.y + r.h / 2 + 9 * u)
-  ctx.textBaseline = 'alphabetic'
-  ctx.restore()
 }
 
 // 每日签到横幅：未签到时显示今日可得 + 连续天数，点击打开签到弹窗（节日/异变优先让位）
@@ -468,8 +345,8 @@ HomeScene.prototype.openCheckin = function () {
   this.modal = Modals.showCheckin(this.sm, function () {
     self.modal = null
     self.chk = checkin.info()
-    self.chkRect = (self.chk && !self.chk.signed && !self.fest && !(self.mut && self.mut.mods.length > 0))
-      ? self.chkRect : null
+    // 节日 / 异变横幅恒为空（已删除），签到横幅只取决于当日是否已签到
+    self.chkRect = (self.chk && !self.chk.signed) ? self.chkRect : null
     self.dustDisp = storage.getDust() // 签到所得直接就位（不重播入场动画）
     self.dirty = true
   })
@@ -483,8 +360,8 @@ HomeScene.prototype.openSeason = function () {
     self.seasonInfo = season.info() // 领取后刷新徽章等级 / 可领数
     // 面板内可能完成签到，关闭时一并重读签到态与光尘（避免横幅残留）
     self.chk = checkin.info()
-    self.chkRect = (self.chk && !self.chk.signed && !self.fest && !(self.mut && self.mut.mods.length > 0))
-      ? self.chkRect : null
+    // 节日 / 异变横幅恒为空（已删除），签到横幅只取决于当日是否已签到
+    self.chkRect = (self.chk && !self.chk.signed) ? self.chkRect : null
     self.dustDisp = storage.getDust()
     self.dirty = true
   })
@@ -540,13 +417,12 @@ HomeScene.prototype.onTouchStart = function (tx, ty) {
       this._dockDown = i
     }
   }
-  if (this.gridSc.hit(tx, ty)) this.gridSc.touchStart(tx, ty)
 }
 
 HomeScene.prototype.onTouchMove = function (tx, ty) {
   if (this.adSim) return
   if (this.modal) { this.modal.onTouchMove(tx, ty); return }
-  if (this.gridSc.dragging) { this.gridSc.touchMove(tx, ty); this.gridSc.lastScrollAt = Date.now() }
+  // 关卡网格已下线，首页不再有可拖拽内容
 }
 
 HomeScene.prototype.onTouchEnd = function (tx, ty) {
@@ -566,17 +442,11 @@ HomeScene.prototype.onTouchEnd = function (tx, ty) {
   }
   this._dockDown = -1
   // Hero 横滑切区 / 圆点 / 关卡网格 / 节日胶囊的命中已随迷宫玩法删除
-  if (this.gridSc.dragging) this.gridSc.touchEnd()
   // 每日签到横幅（可点）
   if (this.touchDown && this.isTap(tx, ty) && this.inChkRect(tx, ty)) {
     this.openCheckin()
   }
   this.touchDown = null
-}
-
-HomeScene.prototype.inHero = function (tx, ty) {
-  const h = this.hero
-  return tx >= h.x && tx <= h.x + h.w && ty >= h.y && ty <= h.y + h.h
 }
 
 HomeScene.prototype.isTap = function (tx, ty) {
@@ -595,121 +465,6 @@ HomeScene.prototype.dotsRect = function () {
   const total = n * dw + (n - 1) * gap
   // 活动横幅存在时，圆点行随之下移（横幅下方 10u）
   return { x: this.sm.W / 2 - total / 2, y: this.festBottom + 0 * u, dw: dw, gap: gap, n: n }
-}
-
-HomeScene.prototype.tapDots = function (tx, ty) {
-  const d = this.dotsRect()
-  if (ty < d.y - 6 || ty > d.y + d.dw + 6) return
-  for (let i = 0; i < d.n; i++) {
-    const x0 = d.x + i * (d.dw + d.gap)
-    if (tx >= x0 - d.gap / 2 && tx <= x0 + d.dw + d.gap / 2) {
-      this.switchZone(i, i > this.activeZone ? 1 : -1)
-      return
-    }
-  }
-}
-
-HomeScene.prototype.tapGrid = function (tx, ty) {
-  const g = this.gz
-  if (tx < g.x || tx > g.x + g.w || ty < g.y || ty > g.y + this.gridSc.h) return
-  const col = Math.floor((tx - g.x) / (this.cw + this.gap))
-  const localY = ty - g.y + this.gridSc.offset
-  const row = Math.floor(localY / (this.chh + this.gap))
-  const inCellY = localY - row * (this.chh + this.gap)
-  if (col < 0 || col >= this.cols || row < 0 || row >= Math.ceil(20 / this.cols) || inCellY > this.chh) return
-  const zone = ZONES[this.activeZone]
-  const lv = zone.start + row * this.cols + col
-  if (lv > zone.end) return
-  if (lv > this.unlocked) {
-    if (lv === this.unlocked + 1) {
-      // 下一待解锁关：广告/光尘解锁面板（防跳关，仅开放此关）
-      fx.burst(tx, ty, { n: 8, colors: ['#FFD86E'], speed: 70, size: 2.2, life: 0.4 })
-      this.openUnlock(lv)
-    } else {
-      this.showToast('请先解锁前面的关卡')
-      fx.burst(tx, ty, { n: 5, colors: ['#8A8FA8'], speed: 50, size: 2, life: 0.3 })
-    }
-    return
-  }
-  fx.burst(tx, ty, { n: 12, colors: [this.zoneColor(this.activeZone), '#FFD86E'], speed: 110, size: 2.6 })
-  this.sm.switch('tower')
-}
-
-// 解锁成功后的本地刷新（unlocked / CTA 副标题 / 网格重入场）
-HomeScene.prototype.refreshUnlock = function () {
-  const prev = this.unlocked
-  this.unlocked = Math.min(storage.getProgress().unlocked, storage.TOTAL)
-  if (this.unlocked === prev) return
-  if (this.goBtn) {
-    this.goBtn.label = '▶ 继续冒险'
-    this.goBtn.sub = '第 ' + this.unlocked + ' 关 · ' + this.zoneOf(this.unlocked).name
-    this.styleGoBtn()
-  }
-  const zoneIdx = ZONES.indexOf(this.zoneOf(this.unlocked))
-  if (zoneIdx >= 0 && zoneIdx !== this.activeZone) this.activeZone = zoneIdx
-  this.progT = this.zoneDoneCount(this.activeZone) / 20
-  this.gridAnim = 0
-  fx.to(this, { gridAnim: 1 }, 560, { ease: 'easeOutCubic' })
-}
-
-// 关卡解锁面板（广告整合 v2）：看广告免费 / 光尘直购，仅对下一待解锁关开放
-HomeScene.prototype.openUnlock = function (lv) {
-  const self = this
-  if (this.modal || this.adSim) return
-  const succeed = function () {
-    storage.adUnlockTo(lv)
-    self.modal = null
-    self.refreshUnlock()
-    self.showToast('已解锁第 ' + lv + ' 关')
-    fx.burst(self.sm.W / 2, self.gz.y + 40 * self.u, { n: 16, colors: ['#FFD86E', '#6FE3D2'], speed: 130, size: 2.8 })
-  }
-  const finish = function (ok, why) {
-    self._unlockBusy = false
-    if (!ok) {
-      if (why === 'daily') self.showToast('今日广告次数已达上限（' + ad.DAILY_LIMIT + ' 次/日）')
-      else if (why === 'interval') self.showToast('操作太频繁，请 ' + ad.freqState().nextInSec + ' 秒后再试')
-      else self.showToast('广告未看完，未能解锁')
-      return
-    }
-    succeed()
-  }
-  const watchAd = function () {
-    if (self._unlockBusy) return
-    self._unlockBusy = true
-    const handled = ad.showRewarded(finish)
-    if (!handled) { ad.recordShown(); self.adSim = new AdSim(self.sm, finish, '解锁第 ' + lv + ' 关') }
-  }
-  const buyDust = function () {
-    if (storage.spendDust(UNLOCK_DUST_COST)) succeed()
-    else self.showToast('光尘不足（需 ' + UNLOCK_DUST_COST + '✦）')
-  }
-  this.modal = new Modal(this.sm, {
-    title: '解锁第 ' + lv + ' 关',
-    lines: [
-      { t: '该关卡尚未通关解锁，可选择：', s: 13 },
-      { t: '', gap: true },
-      { t: '▶ 观看一段广告，免费立即解锁', c: '#FFD86E', b: true, s: 12.5 },
-      { t: '今日剩余广告次数 ' + ad.freqState().remain + '/' + ad.DAILY_LIMIT, c: '#9AA0C8', s: 10.5 },
-      { t: '✦ 花费 ' + UNLOCK_DUST_COST + ' 光尘直接解锁（通关/每日获取，不可充值）', c: '#9AA0C8', s: 11.5 }
-    ],
-    buttons: (function () {
-      const arr = [
-        { label: '看广告解锁', primary: true, onTap: watchAd },
-        { label: UNLOCK_DUST_COST + '✦ 解锁', onTap: buyDust }
-      ]
-      const unlockCoupon = storage.getCoupons().unlock || 0
-      if (unlockCoupon > 0) arr.push({
-        label: '解锁券×' + unlockCoupon,
-        onTap: function () {
-          if (storage.spendCoupon('unlock')) succeed()
-          else self.showToast('解锁券不足')
-        }
-      })
-      arr.push({ label: '取消' })
-      return arr
-    })(),
-    onClose: function () { self.modal = null }
-  })
 }
 
 /* ---------- 帧更新 ---------- */
@@ -978,7 +733,8 @@ HomeScene.prototype.drawHero = function (ctx, v) {
     ctx.restore()
   }
 
-  // 徽章：状态指示（锁定 / 进行中 / 已通关）—— 右上角状态标，与左侧「第 X–Y 关」文案分离，文字在容器内垂直居中
+  // 徽章：塔防最佳波数状态标。唯一玩法下不再有「锁定 / 进行中 / 已通关」三态，
+  // 收敛为单一高亮绘制（原三态分支残留的未定义变量 locked 会让入场后整页绘制抛 ReferenceError）。
   // 宽度按文字实测自适应，避免固定宽导致的右侧空白与遮挡
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
@@ -988,32 +744,16 @@ HomeScene.prototype.drawHero = function (ctx, v) {
   const badgeW = Math.ceil(ctx.measureText(badgeText).width) + 26 * u
   const bx = h.x + h.w - 20 * u - badgeW
   const bby = h.y + 20 * u
-  if (locked) {
-    ctx.fillStyle = 'rgba(0,0,0,0.45)'
-    roundRect(ctx, bx, bby, badgeW, 30 * u, 15 * u)
-    ctx.fill()
-    ctx.fillStyle = v['--text-sub']
-    ctx.font = badgeFont
-    ctx.fillText(badgeText, bx + 13 * u, bby + 15.5 * u)
-  } else if (this.unlocked >= zone.start && this.unlocked <= zone.end) {
-    ctx.save()
-    ctx.shadowColor = zc
-    ctx.shadowBlur = 8
-    roundRect(ctx, bx, bby, badgeW, 30 * u, 15 * u)
-    ctx.fillStyle = this.hexA(zc, 0.9)
-    ctx.fill()
-    ctx.restore()
-    ctx.fillStyle = 'rgba(10,12,32,0.9)'
-    ctx.font = badgeFont
-    ctx.fillText(badgeText, bx + 13 * u, bby + 15.5 * u)
-  } else {
-    ctx.fillStyle = this.hexA(zc, 0.85)
-    roundRect(ctx, bx, bby, badgeW, 30 * u, 15 * u)
-    ctx.fill()
-    ctx.fillStyle = 'rgba(10,12,32,0.9)'
-    ctx.font = badgeFont
-    ctx.fillText(badgeText, bx + 13 * u, bby + 15.5 * u)
-  }
+  ctx.save()
+  ctx.shadowColor = zc
+  ctx.shadowBlur = 8
+  roundRect(ctx, bx, bby, badgeW, 30 * u, 15 * u)
+  ctx.fillStyle = this.hexA(zc, 0.9)
+  ctx.fill()
+  ctx.restore()
+  ctx.fillStyle = 'rgba(10,12,32,0.9)'
+  ctx.font = badgeFont
+  ctx.fillText(badgeText, bx + 13 * u, bby + 15.5 * u)
 
   ctx.textBaseline = 'alphabetic'
 
@@ -1057,146 +797,6 @@ HomeScene.prototype.drawHero = function (ctx, v) {
   }
 
   // 左右箭头
-  ctx.restore()
-}
-
-// 圆点指示器（当前区加长胶囊）
-HomeScene.prototype.drawDots = function (ctx, v) {
-  const u = this.u
-  const e = this.ent(1)
-  if (e <= 0) return
-  const d = this.dotsRect()
-  ctx.save()
-  ctx.globalAlpha = e
-  for (let i = 0; i < d.n; i++) {
-    const x0 = d.x + i * (d.dw + d.gap)
-    if (i === this.activeZone) {
-      roundRect(ctx, d.x + this.activeZone * (d.dw + d.gap) - 4 * u, d.y, d.dw + 8 * u, d.dw, d.dw / 2)
-      ctx.fillStyle = this.zoneColor(this.activeZone)
-      ctx.fill()
-    } else {
-      ctx.beginPath()
-      ctx.arc(x0 + d.dw / 2, d.y + d.dw / 2, 2.4 * u, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(255,255,255,0.28)'
-      ctx.fill()
-    }
-  }
-  ctx.restore()
-}
-
-// 关卡节点图（5 列紧凑圆角节点：编号 + 星级/状态，行内连接线）
-HomeScene.prototype.drawGrid = function (ctx, v) {
-  const g = this.gz
-  const sc = this.gridSc
-  const zone = ZONES[this.activeZone]
-  const zc = this.zoneColor(this.activeZone)
-  const u = this.u
-  const rows = Math.ceil(20 / this.cols)
-  const e0 = this.ent(2)
-  if (e0 <= 0) return
-  ctx.save()
-  ctx.globalAlpha = e0
-  ctx.translate(0, (1 - e0) * 14)
-  ctx.beginPath()
-  ctx.rect(g.x - 6, g.y - 6, g.w + 12, sc.h + 12)
-  ctx.clip()
-
-  for (let row = 0; row < rows; row++) {
-    const rowY = g.y + row * (this.chh + this.gap) - sc.offset
-    if (rowY + this.chh < g.y - 20 || rowY > g.y + sc.h + 20) continue
-    // 行内连接线（节点之间，已通关段点亮）
-    for (let col = 0; col < this.cols - 1; col++) {
-      const lvA = zone.start + row * this.cols + col
-      if (lvA >= zone.end) break
-      const ax = g.x + col * (this.cw + this.gap) + this.cw - 1
-      const yy = rowY + this.chh / 2
-      ctx.beginPath()
-      ctx.moveTo(ax, yy)
-      ctx.lineTo(ax + this.gap + 2, yy)
-      ctx.lineWidth = 2
-      // 已走过的路线（lvA 之后的格子已解锁）整体点亮并呼吸，已通关对更亮
-      const traversed = (lvA + 1) <= this.unlocked
-      const fully = this.completed[lvA] && this.completed[lvA + 1]
-      ctx.strokeStyle = traversed
-        ? this.hexA(zc, fully ? 0.5 + 0.22 * fx.pulse(1300, row * 0.5) : 0.34 + 0.14 * fx.pulse(1300, row * 0.5))
-        : 'rgba(255,255,255,0.08)'
-      ctx.stroke()
-    }
-
-    for (let col = 0; col < this.cols; col++) {
-      const lv = zone.start + row * this.cols + col
-      if (lv > zone.end) break
-      const idx = row * this.cols + col
-      const lp = Math.max(0, Math.min(1, this.gridAnim * 1.5 - idx * 0.05))
-      if (lp <= 0) continue
-      const le = fx.E.easeOutCubic(lp)
-      const x0 = g.x + col * (this.cw + this.gap)
-      const y0 = rowY + (1 - le) * 12
-      const rec = this.completed[lv]
-      const done = !!rec
-      const current = lv === this.unlocked
-      const locked = lv > this.unlocked
-      ctx.save()
-      ctx.globalAlpha = e0 * le
-      // 节点底（圆润小方）
-      roundRect(ctx, x0, y0, this.cw, this.chh, 15 * u)
-      if (done) {
-        ctx.fillStyle = this.hexA(zc, 0.18)
-        ctx.fill()
-        ctx.lineWidth = 1.1
-        ctx.strokeStyle = this.hexA(zc, 0.5)
-        ctx.stroke()
-      } else if (current) {
-        ctx.fillStyle = v['--glass-strong'] || 'rgba(255,255,255,0.14)'
-        ctx.fill()
-        ctx.lineWidth = 1.6
-        ctx.globalAlpha = e0 * le * (0.6 + 0.4 * fx.pulse(1100))
-        ctx.strokeStyle = v['--warn']
-        ctx.stroke()
-        ctx.globalAlpha = e0 * le
-      } else {
-        ctx.fillStyle = 'rgba(255,255,255,0.045)'
-        ctx.fill()
-        ctx.lineWidth = 1
-        ctx.strokeStyle = 'rgba(255,255,255,0.09)'
-        ctx.stroke()
-      }
-      // 编号
-      ctx.textAlign = 'center'
-      ctx.fillStyle = done ? this.hexA(zc, 0.95) : current ? v['--warn'] : locked ? v['--text-sub'] : v['--text']
-      ctx.globalAlpha = e0 * le * (locked ? 0.45 : 1)
-      ctx.font = 'bold ' + Math.round(17 * u) + 'px sans-serif'
-      ctx.fillText(String(lv), x0 + this.cw / 2, y0 + this.chh / 2 - 5 * u)
-      // 状态行
-      ctx.font = Math.round(9 * u) + 'px sans-serif'
-      if (done) {
-        const stars = rec.stars || 1
-        ctx.fillStyle = 'rgba(255,236,170,0.95)'
-        ctx.fillText('★'.repeat(stars) + '☆'.repeat(3 - stars), x0 + this.cw / 2, y0 + this.chh / 2 + 14 * u)
-      } else if (current) {
-        ctx.fillStyle = v['--warn']
-        ctx.fillText('▶ 挑战中', x0 + this.cw / 2, y0 + this.chh / 2 + 14 * u)
-      } else if (locked) {
-        if (lv === this.unlocked + 1) {
-          // 下一待解锁关：金色广告角标（可点看广告/光尘解锁）
-          ctx.fillStyle = '#FFD86E'
-          ctx.fillText('▶ 广告', x0 + this.cw / 2, y0 + this.chh / 2 + 14 * u)
-        } else {
-          ctx.globalAlpha = e0 * le * 0.35
-          ctx.fillText('🔒', x0 + this.cw / 2, y0 + this.chh / 2 + 14 * u)
-          ctx.globalAlpha = e0 * le * (locked ? 0.45 : 1)
-        }
-      }
-      // Boss 关标记（L80-100 限时追逐）
-      if (lv >= 80 && lv <= 100) {
-        ctx.font = Math.round(8.5 * u) + 'px sans-serif'
-        ctx.textAlign = 'left'
-        ctx.fillText('👑', x0 + 5 * u, y0 + 12 * u)
-      }
-      ctx.restore()
-    }
-  }
-  sc.drawBar(ctx)
   ctx.restore()
 }
 

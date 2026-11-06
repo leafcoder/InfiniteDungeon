@@ -118,15 +118,15 @@ const HEROES = [
     pal: { skin: '#FFE3C4', hair: '#453863', tunic: '#FFC15E', tunic2: '#D98F35', pants: '#4E4370', boot: '#2E2850', eye: '#2E2850', flame: ['255,240,170', '255,180,70', '255,120,40'] }
   },
   {
-    id: 'mint', name: '薄荷信使', desc: '累计通关 5 关解锁', by: 'clears', need: 5, ick: 'leaf',
+    id: 'mint', name: '薄荷信使', desc: '累计守卫 3 局解锁', by: 'clears', need: 3, ick: 'leaf',
     pal: { skin: '#FFE3C4', hair: '#2E5E50', tunic: '#6FE3D2', tunic2: '#3AA896', pants: '#27423C', boot: '#1C2E2A', eye: '#1C2E2A', flame: ['220,255,245', '140,240,215', '80,200,170'] }
   },
   {
-    id: 'sunset', name: '落霞行者', desc: '累计 20 颗星解锁', by: 'stars', need: 20, ick: 'spark',
+    id: 'sunset', name: '落霞行者', desc: '累计守住 40 波解锁', by: 'stars', need: 40, ick: 'spark',
     pal: { skin: '#FFD9B8', hair: '#6B3550', tunic: '#FF9F6E', tunic2: '#D96C45', pants: '#4A2E44', boot: '#33202E', eye: '#33202E', flame: ['255,235,190', '255,170,90', '230,110,50'] }
   },
   {
-    id: 'abyssal', name: '渊行者', desc: '累计 45 颗星解锁', by: 'stars', need: 45, ick: 'wave',
+    id: 'abyssal', name: '渊行者', desc: '累计守住 120 波解锁', by: 'stars', need: 120, ick: 'wave',
     pal: { skin: '#D8E8EC', hair: '#123040', tunic: '#40E0FF', tunic2: '#2B9EB8', pants: '#14323E', boot: '#0C2028', eye: '#0C2028', flame: ['220,250,255', '130,230,250', '60,180,220'] }
   },
   {
@@ -134,7 +134,7 @@ const HEROES = [
     pal: { skin: '#FFE3C4', hair: '#8A4A6B', tunic: '#FF9ECB', tunic2: '#D9689F', pants: '#5C3244', boot: '#3E2130', eye: '#3E2130', flame: ['255,240,248', '255,190,220', '240,130,180'] }
   },
   {
-    id: 'lava', name: '熔核骑士', desc: '累计通关 30 关解锁', by: 'clears', need: 30, ick: 'sword',
+    id: 'lava', name: '熔核骑士', desc: '累计守卫 10 局解锁', by: 'clears', need: 10, ick: 'sword',
     pal: { skin: '#F2C8A8', hair: '#3A1E18', tunic: '#FF6B4A', tunic2: '#C23E28', pants: '#40201A', boot: '#26120E', eye: '#26120E', flame: ['255,245,200', '255,150,60', '220,70,30'] }
   },
   {
@@ -148,12 +148,12 @@ const HEROES = [
     pal: { skin: '#FFE3C4', hair: '#3A3F8C', tunic: '#7A6BFF', tunic2: '#4A3EB8', pants: '#262450', boot: '#181636', eye: '#181636', flame: ['230,225,255', '160,140,255', '100,80,230'] }
   },
   {
-    id: 'samurai', name: '月影武士', desc: '累计通关 60 关解锁', by: 'clears', need: 60, ick: 'sword',
+    id: 'samurai', name: '月影武士', desc: '累计守卫 20 局解锁', by: 'clears', need: 20, ick: 'sword',
     outfit: 'samurai',
     pal: { skin: '#F5D5B5', hair: '#1A1A28', tunic: '#C23B4E', tunic2: '#7E1F30', pants: '#221826', boot: '#141018', eye: '#141018', flame: ['255,235,235', '255,150,150', '220,80,90'] }
   },
   {
-    id: 'knight', name: '黎明骑士', desc: '累计 80 颗星解锁', by: 'stars', need: 80, ick: 'shield',
+    id: 'knight', name: '黎明骑士', desc: '累计守住 240 波解锁', by: 'stars', need: 240, ick: 'shield',
     outfit: 'knight',
     pal: { skin: '#F2C8A8', hair: '#5A4632', tunic: '#9FB6E8', tunic2: '#5A74B8', pants: '#2E3A5C', boot: '#1C2440', eye: '#1C2440', flame: ['250,250,255', '190,210,250', '120,150,220'] }
   },
@@ -163,7 +163,7 @@ const HEROES = [
     pal: { skin: '#E8C8A8', hair: '#20202E', tunic: '#3E4458', tunic2: '#262B3C', pants: '#1A1E2C', boot: '#10121C', eye: '#9AE8D8', flame: ['220,240,255', '150,200,230', '90,140,180'] }
   },
   {
-    id: 'archer', name: '风语弓手', desc: '累计通关 90 关解锁', by: 'clears', need: 90, ick: 'leaf',
+    id: 'archer', name: '风语弓手', desc: '累计守卫 40 局解锁', by: 'clears', need: 40, ick: 'leaf',
     outfit: 'archer',
     pal: { skin: '#FFE3C4', hair: '#7A4E2A', tunic: '#6FBF7A', tunic2: '#3E8C52', pants: '#2C4A34', boot: '#1A2E20', eye: '#1A2E20', flame: ['235,255,230', '160,230,150', '90,180,100'] }
   }
@@ -171,18 +171,18 @@ const HEROES = [
 
 // 英雄微特性（N5）：每款 1 条轻特性，强化收集意义；数值刻意压低不卖数值
 const HERO_TRAITS = {
-  rover:   { name: '旅人直觉', desc: '探索度评价 +3 分', explore: 3 },
-  mint:    { name: '薄荷清爽', desc: '道具效果时长 +10%', fxDur: 1.10 },
-  sunset:  { name: '霞光馈赠', desc: '光尘结算 +5%', gem: 1.05 },
-  abyssal: { name: '渊视', desc: '迷雾关火把视野 +8%', view: 1.08 },
-  sakura:  { name: '樱盾', desc: '开局 2 秒无敌', invuln: 2000 },
-  lava:    { name: '熔核余温', desc: 'Boss 追逐关步频 +5%', bossStep: 0.95 },
-  royal:   { name: '贵胄礼遇', desc: '每日挑战光尘 +10%', daily: 1.10 },
-  mage:    { name: '秘纹回响', desc: '道具效果时长 +15%', fxDur: 1.15 },
-  samurai: { name: '居合残心', desc: 'Boss 关步频 +10%', bossStep: 0.90 },
-  knight:  { name: '铁壁誓约', desc: '道具效果时长 +20%', fxDur: 1.20 },
-  rogue:   { name: '暗影轻盈', desc: '迷雾关火把视野 +6%', view: 1.06 },
-  archer:  { name: '鹰眼', desc: '迷雾关火把视野 +12%', view: 1.12 }
+  rover:   { name: '旅人直觉', desc: '老练的探路者', explore: 3 },
+  mint:    { name: '薄荷清爽', desc: '步履轻快如风', fxDur: 1.10 },
+  sunset:  { name: '霞光馈赠', desc: '霞光偏爱守夜人', gem: 1.05 },
+  abyssal: { name: '渊视', desc: '深渊里也看得清', view: 1.08 },
+  sakura:  { name: '樱盾', desc: '落樱护住第一波', invuln: 2000 },
+  lava:    { name: '熔核余温', desc: '熔核不惧层主', bossStep: 0.95 },
+  royal:   { name: '贵胄礼遇', desc: '星海赐福予贵胄', daily: 1.10 },
+  mage:    { name: '秘纹回响', desc: '秘纹在塔上流转', fxDur: 1.15 },
+  samurai: { name: '居合残心', desc: '居合只斩来敌', bossStep: 0.90 },
+  knight:  { name: '铁壁誓约', desc: '铁壁之誓不退', fxDur: 1.20 },
+  rogue:   { name: '暗影轻盈', desc: '暗影中自有眼', view: 1.06 },
+  archer:  { name: '鹰眼', desc: '鹰眼锁定长路', view: 1.12 }
 };
 function getHeroTrait() {
   return HERO_TRAITS[getHero()] || null;

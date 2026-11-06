@@ -19,7 +19,41 @@ function mulberry32(a) {
   }
 }
 
-/* ============ 静态配置（数值草案，P2 实测调平） ============ */
+/* ============ v1.4 实测调平：战斗数值单一事实来源 ============
+ * 与 core/mode.js 的 WAVE_RULES 分工：
+ *   - WAVE_RULES 管「一局结束后」的光尘 / 赛季 XP / 成就口径；
+ *   - WAVE_TUNING 管「一局之内」的经济、难度曲线、塔成长与金币出口。
+ * 禁止在业务代码里另写魔法数字。
+ *
+ * 仿真基线（v1.4.0）：真实玩家前 9~17 波满血零漏怪，第 15 波后断崖式崩盘；
+ * 12 座 Lv3 后战力封顶而敌人 HP 仍线性增长，金币从第 14 波 523 涨到第 19 波 2270 无处可花。
+ * 本次三条对策：① 收紧前期经济制造取舍；② HP 曲线加二次项让压力渐进；
+ * ③ 塔等级上限 Lv5 + 全局锻造，让溢出金币持续转化为战力（消除断崖）。
+ */
+const WAVE_TUNING = {
+  startGold: 100,            // 原 120：开局只够 1 座弩塔 + 余款，第一波就要做取舍
+  countBase: 6,
+  countPerWave: 1.5,
+  hpLinear: 0.26,            // 原 0.28 线性
+  hpQuad: 0.004,             // 二次项：让压力逐波可感知，而非一条平线后突然崩塌
+  hpDeepStart: 30,           // 30 波后进入深渊加速
+  hpDeepPerWave: 0.42,
+  spawnGapBase: 0.52,        // 原 0.55：前期即有轻微出场积压
+  spawnGapPerWave: 0.017,
+  spawnGapMin: 0.17,         // 原 0.18
+  bonusBase: 16,             // 原 20+5n → 16+4n，温和收紧波奖（赏金仍是主收入）
+  bonusPerWave: 4,
+  maxTowerLv: 5,             // 原 3：12 座塔的金币坑加深，战力得以延续
+  upgradeBase: 0.8,          // Lv1→2 = 0.8×造价
+  upgradeStep: 0.6,          // 每级 +0.6（Lv4→5 = 2.6×造价）
+  forgeBase: 80,             // 全局锻造：全体塔伤害 +8%/级，价格指数递增
+  forgeGrowth: 1.35,
+  forgeDmgStep: 0.08,
+  forgeMax: 15               // 硬上限（最高 ×2.2），防止高波数无限叠乘后无敌
+}
+const MAX_TOWER_LV = WAVE_TUNING.maxTowerLv
+
+/* ============ 静态配置 ============ */
 const TOWER_DEFS = {
   arrow: { key: 'arrow', name: '弩塔', cost: 60, dmg: 12, cd: 0.8, range: 3.2, color: '#6FE3D2', splash: 0 },
   frost: { key: 'frost', name: '霜塔', cost: 80, dmg: 4, cd: 1.0, range: 2.8, color: '#8FD8FF', splash: 0, slow: 0.35, slowDur: 1.5 },
@@ -95,17 +129,27 @@ function nearestSlot(slots, cx, cy, occupied, maxDist) {
 }
 
 /* ============ 波次数值（纯函数，供测试直接断言） ============ */
-function waveCount(n) { return 6 + Math.floor(n * 1.5) }
+function waveCount(n) {
+  return WAVE_TUNING.countBase + Math.floor(n * WAVE_TUNING.countPerWave)
+}
 function waveHpMul(n) {
-  // 实测校准：路径 20~28 格使敌人约 12~17 秒全程暴露在塔射程内，
-  // 0.18/波 会让满配 12 座塔在第 21 波仍满血。0.28/波 把瓶颈推到 17~20 波。
-  if (n <= 30) return 1 + (n - 1) * 0.28
-  return 1 + 29 * 0.28 + (n - 30) * 0.42
+  const k = n - 1
+  // 二次项是关键：纯线性时 12 座满级塔在前 14 波完全无压力，之后 3 波内直接崩盘。
+  const quad = function (kk) {
+    return 1 + WAVE_TUNING.hpLinear * kk + WAVE_TUNING.hpQuad * kk * kk
+  }
+  if (n <= WAVE_TUNING.hpDeepStart) return quad(k)
+  const cap = WAVE_TUNING.hpDeepStart - 1
+  return quad(cap) + (n - WAVE_TUNING.hpDeepStart) * WAVE_TUNING.hpDeepPerWave
 }
 function waveSpeedMul(n) { return Math.min(1 + (n - 1) * 0.02, 1.5) }
-// 出场密度才是难度主杠杆：固定 0.55s 时塔能「来一只秒一只」，HP 再高也不积压
-function waveSpawnGap(n) { return Math.max(0.18, 0.55 - (n - 1) * 0.018) }
-function waveBonus(n) { return 20 + 5 * n }
+// 出场密度才是难度主杠杆：间隔过宽时塔能「来一只秒一只」，HP 再高也不积压
+function waveSpawnGap(n) {
+  return Math.max(WAVE_TUNING.spawnGapMin, WAVE_TUNING.spawnGapBase - (n - 1) * WAVE_TUNING.spawnGapPerWave)
+}
+function waveBonus(n) {
+  return WAVE_TUNING.bonusBase + WAVE_TUNING.bonusPerWave * n
+}
 
 /* ============ 构造 ============ */
 function TowerCore(level, opts) {
@@ -119,7 +163,9 @@ function TowerCore(level, opts) {
   this.phase = 'prep'
   this.wave = 0
   this.reached = 0
-  this.gold = 120
+  this.gold = WAVE_TUNING.startGold
+  // 字段名必须与原型方法 forge() 区分：同名实例字段会遮蔽方法（c.forge is not a function）
+  this.forgeLv = 0
   this.hp = HP_MAX
   this.hpMax = HP_MAX
   this.prepLeft = PREP_SEC
@@ -246,17 +292,44 @@ TowerCore.prototype.build = function (slot, type) {
 }
 TowerCore.prototype.upgradeCost = function (t) {
   if (!t) return 0
-  return Math.round(TOWER_DEFS[t.type].cost * (t.lv === 1 ? 0.8 : 1.4))
+  // Lv1→2 = 0.8×造价，之后每级 +0.6×造价：把金币坑从 12 座 ×2 级加深到 ×4 级
+  return Math.round(TOWER_DEFS[t.type].cost *
+    (WAVE_TUNING.upgradeBase + WAVE_TUNING.upgradeStep * (t.lv - 1)))
 }
 TowerCore.prototype.upgrade = function (t) {
   if (!t || this.phase === 'over') return false
-  if (t.lv >= 3) { this.emit('hint', { text: '已达最高等级' }); return false }
+  if (t.lv >= MAX_TOWER_LV) { this.emit('hint', { text: '已达最高等级' }); return false }
   const c = this.upgradeCost(t)
   if (this.gold < c) { this.emit('hint', { text: '金币不足（需要 ' + c + '）' }); return false }
   this.gold -= c
   t.invest += c
   t.lv++
   this.emit('upgrade', { type: t.type, lv: t.lv, cost: c })
+  return true
+}
+
+/* ============ 金币出口：全局锻造（本局有效，价格指数递增） ============
+ * 12 座塔全部 Lv5 后金币仍会继续积累，锻造提供无限但有边际成本的战力出口，
+ * 让高波数靠经营延续，而不是「战力封顶 → 敌人 HP 线性增长 → 必然断崖」。
+ */
+TowerCore.prototype.damageMul = function () {
+  return 1 + this.forgeLv * WAVE_TUNING.forgeDmgStep
+}
+TowerCore.prototype.forgeCost = function () {
+  if (this.forgeLv >= WAVE_TUNING.forgeMax) return 0
+  return Math.round(WAVE_TUNING.forgeBase * Math.pow(WAVE_TUNING.forgeGrowth, this.forgeLv))
+}
+TowerCore.prototype.forge = function () {
+  if (this.phase === 'over') return false
+  if (this.forgeLv >= WAVE_TUNING.forgeMax) {
+    this.emit('hint', { text: '锻造已达上限' })
+    return false
+  }
+  const c = this.forgeCost()
+  if (this.gold < c) { this.emit('hint', { text: '金币不足（需要 ' + c + '）' }); return false }
+  this.gold -= c
+  this.forgeLv++
+  this.emit('forge', { lv: this.forgeLv, cost: c, dmgMul: this.damageMul() })
   return true
 }
 TowerCore.prototype.sell = function (t) {
@@ -363,6 +436,7 @@ TowerCore.prototype.findTarget = function (x, y, range) {
 }
 TowerCore.prototype.dealDamage = function (target, dmg, def) {
   const self = this
+  const mul = this.damageMul()   // 全局锻造加成：直击与溅射一视同仁
   const hit = function (e, amount) {
     if (!e || !e.alive) return
     e.hp -= amount
@@ -374,7 +448,7 @@ TowerCore.prototype.dealDamage = function (target, dmg, def) {
       self.emit('kill', { type: e.type, gold: gold })
     }
   }
-  hit(target, dmg)
+  hit(target, dmg * mul)
   if (def.splash > 0) {
     const r2 = def.splash * def.splash
     for (let i = 0; i < this.enemies.length; i++) {
@@ -382,7 +456,7 @@ TowerCore.prototype.dealDamage = function (target, dmg, def) {
       if (!e.alive || e === target) continue
       const dx = e.x - target.x
       const dy = e.y - target.y
-      if (dx * dx + dy * dy <= r2) hit(e, dmg * 0.6)
+      if (dx * dx + dy * dy <= r2) hit(e, dmg * 0.6 * mul)
     }
   }
   if (def.slow && target.alive) target.slowT = def.slowDur
@@ -477,6 +551,7 @@ TowerCore.prototype.stats = function () {
     wave: this.wave, reached: this.reached, gold: this.gold,
     hp: this.hp, hpMax: this.hpMax, kills: this.kills, leaks: this.leaks,
     towers: this.towers.length, pathLen: this.pathLen, pathDist: this.pathDist,
+    forge: this.forgeLv, dmgMul: this.damageMul(),
     phase: this.phase
   }
 }
@@ -495,6 +570,8 @@ module.exports.waveHpMul = waveHpMul
 module.exports.waveSpeedMul = waveSpeedMul
 module.exports.waveSpawnGap = waveSpawnGap
 module.exports.waveBonus = waveBonus
+module.exports.WAVE_TUNING = WAVE_TUNING
+module.exports.MAX_TOWER_LV = MAX_TOWER_LV
 module.exports.MAX_TOWERS = MAX_TOWERS
 module.exports.PREP_SEC = PREP_SEC
 module.exports.PATH_MIN = PATH_MIN
