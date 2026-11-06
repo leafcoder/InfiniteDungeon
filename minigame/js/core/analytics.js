@@ -14,7 +14,9 @@ const MAX_BUFFER = 50
 const TRACK_EVENTS = [
   'level_win', 'level_fail', 'daily_win', 'weekly_win', 'festival_win',
   'endless_depth', 'ach_unlock', 'season_claim', 'checkin',
-  'mutation_win', 'ngplus_enter', 'intro_seen', 'td_start', 'td_end'
+  'mutation_win', 'ngplus_enter', 'intro_seen', 'td_start', 'td_end',
+  // P1.5 塔防默认模式：波数结算与赐福选择（默认零网络请求，仅本机环形缓冲）
+  'td_wave', 'td_bless'
 ]
 
 let transport = null

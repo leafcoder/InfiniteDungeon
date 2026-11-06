@@ -96,7 +96,9 @@ async function main() {
   // 通关清零
   mercy.recordWin();
   gs.enter({ level: 31, mode: 'level' });
-  T('通关后重建 mercyStreak=0', gs.mercyStreak === 0 && !gs.banner);
+  // 只断言「连败保护提示消失」：其它来源的开局 banner（如当日异变词缀）与 mercy 无关，
+  // 写死 !gs.banner 会让回归随真实日期漂移而偶发失败。
+  T('通关后重建 mercyStreak=0', gs.mercyStreak === 0 && (!gs.banner || String(gs.banner.text).indexOf('连败保护') < 0));
 
   console.log('--- 7. 模式豁免 ---');
   mercy.recordFail(30); mercy.recordFail(30); mercy.recordFail(30);

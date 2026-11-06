@@ -15,7 +15,8 @@ const TASK_KEY = 'maze_task_v1'
 // normal 档即 v1.3 原始数值，保证 TASKS.daily 的导出值向后兼容
 const BASE_DAILY = [
   { id: 'D1', cat: 'collect', name: '今日光尘矿工', desc: '当日累计获得光尘', target: 120, reward: { dust: 20 } },
-  { id: 'D2', cat: 'progress', name: '今日通关达人', desc: '当日通关关卡数', target: 3, reward: { revive: 1 } },
+  // v1.4 P1.5：塔防默认模式下 D2 口径重定义为「当日完成守卫局数」（一局 ≈ 一次关卡挑战），target 不变
+  { id: 'D2', cat: 'progress', name: '今日守卫达人', desc: '当日完成守卫局数', target: 3, reward: { revive: 1 } },
   { id: 'D3', cat: 'social', name: '今日进圈打卡', desc: '进入游戏圈打卡', target: 1, reward: { dust: 15 } }
 ]
 
@@ -55,7 +56,8 @@ function buildDaily(v) {
 const TASKS = {
   daily: buildDaily('normal'),   // 导出恒为标准档（兼容旧调用方与回归断言）
   weekly: [
-    { id: 'W1', cat: 'progress', name: '本周塔尖挑战', desc: '本周无尽塔最深层', target: 15, reward: { frame: '登塔者' } },
+    // v1.4 P1.5：「深度」重定义为本周最高守住波数，数值沿用 15
+    { id: 'W1', cat: 'progress', name: '本周塔尖挑战', desc: '本周最高守住波数', target: 15, reward: { frame: '登塔者' } },
     { id: 'W2', cat: 'collect', name: '本周光尘积累', desc: '本周累计获得光尘', target: 800, reward: { unlock: 1 } }
   ]
 }
@@ -248,12 +250,15 @@ function onGameClubTap() {
   // 赛季 XP：打卡也是一次回访行为，给小额进度（懒加载避免 season→task 静态环）
   try { const sn = require('./season'); if (sn && sn.addXp) sn.addXp(5) } catch (e) {}
 }
-function onEndlessDepth(d) {
+function onEndlessDepth(d, skipSeason) {
   if (!d || d <= 0) return
   const s = ensure()
   const w1 = s.weekly.filter(function (x) { return x.id === 'W1' })[0]
   if (w1 && !w1.claimed && d > w1.progress) { w1.progress = d; save(s) }
-  // 赛季 XP：仅刷新本赛季最深纪录时由 season.onDepth 内部判重发放
+  // 赛季 XP：迷宫无尽塔仍由 season.onDepth 按最深层判重。
+  // 塔防默认模式传 skipSeason=true：破纪录改由 TowerScene 用本机最佳波数判重发放，
+  // 避免复用 bestFloor 导致老存档的深度污染塔防波数奖励。
+  if (skipSeason) return
   try { const sn = require('./season'); if (sn && sn.onDepth) sn.onDepth(d) } catch (e) {}
 }
 

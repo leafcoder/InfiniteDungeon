@@ -20,6 +20,7 @@ const checkin = require('../core/checkin')
 const ngplus = require('../core/ngplus')
 const codex = require('../core/codex')
 const season = require('../core/season')
+const mode = require('../core/mode')
 const analytics = require('../core/analytics')
 const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
@@ -193,6 +194,9 @@ function shardGuide(sm, k, t, cost, reopen) {
 function buildHeroRows(sm, refresh) {
   const cur = storage.getHero()
   const stats = storage.heroStats()
+  // 塔防默认模式：解锁源已迁入波数口径，进度单位随之切换（局 / 波）
+  const uStar = mode.isTowerDefault() ? ' 波' : ' 星'
+  const uClear = mode.isTowerDefault() ? ' 局' : ' 关'
   return storage.HEROES.map(function (h) {
     const avail = storage.heroAvailable(h.id)
     const using = cur === h.id
@@ -200,8 +204,8 @@ function buildHeroRows(sm, refresh) {
     let tagColor = '#FFD86E'
     if (using) { tag = '使用中'; tagColor = '#FFC15E' }
     else if (avail) { tag = '点按切换'; tagColor = '#6FE3D2' }
-    else if (h.by === 'stars') { tag = '还差 ' + Math.max(0, h.need - stats.stars) + ' 星'; tagColor = '#9AA0C8' }
-    else if (h.by === 'clears') { tag = '还差 ' + Math.max(0, h.need - stats.clears) + ' 关'; tagColor = '#9AA0C8' }
+    else if (h.by === 'stars') { tag = '还差 ' + Math.max(0, h.need - stats.stars) + uStar; tagColor = '#9AA0C8' }
+    else if (h.by === 'clears') { tag = '还差 ' + Math.max(0, h.need - stats.clears) + uClear; tagColor = '#9AA0C8' }
     else if (h.by === 'ad') { tag = '看广告'; tagColor = '#9AA0C8' }
     else { tag = h.price + '✦' }
     // 副标题恒为一句短文案（≤11 字），进度走 tag，特性名并入标题——避免超出行卡宽度
@@ -233,7 +237,7 @@ function buildHeroRows(sm, refresh) {
         if (h.by === 'stars' || h.by === 'clears') {
           const cur2 = storage.heroStats()
           const lack = h.need - (h.by === 'stars' ? cur2.stars : cur2.clears)
-          sm.toast(h.by === 'stars' ? '还差 ' + lack + ' 颗星解锁' : '还差 ' + lack + ' 关通关解锁')
+          sm.toast(h.by === 'stars' ? '还差 ' + lack + (mode.isTowerDefault() ? ' 波解锁' : ' 颗星解锁') : '还差 ' + lack + (mode.isTowerDefault() ? ' 局守卫解锁' : ' 关通关解锁'))
           return
         }
         if (h.by === 'dust') {
@@ -407,9 +411,11 @@ function showSettings(sm, onClose) {
     // 挑战码：低频硬核功能从顶栏收进设置二级页，不再占常驻热区
     rows.push({
       ick: 'lock', icCol: '#FFD86E',
-      title: '挑战码', sub: '输入口令挑战自定义词缀关卡',
+      title: '挑战码', sub: mode.isTowerDefault() ? '依赖迷宫关卡，当前已下线' : '输入口令挑战自定义词缀关卡',
       tag: '输入 ›', tagColor: '#FFC15E',
       onTap: function () {
+        // 软切换：塔防默认模式下该行仅作历史陈列，不进入已下线的迷宫关卡
+        if (mode.isTowerDefault()) { sm.toast('迷宫玩法已下线'); return }
         sm.sceneModal(showCode(sm, function (dec) {
           sm.switch('game', { mode: 'custom', level: dec.level, mods: dec.mods, seed: dec.seed, code: dec.code })
         }, function () {}))

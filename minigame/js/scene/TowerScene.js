@@ -12,6 +12,9 @@ const BLESSINGS = TowerCore.BLESSINGS
 const MAX_TOWERS = TowerCore.MAX_TOWERS
 const storage = require('../core/storage')
 const analytics = require('../core/analytics')
+const mode = require('../core/mode')
+const task = require('../core/task')
+const season = require('../core/season')
 const Modal = require('../ui/Modal')
 const { Button } = require('../ui/Button')
 
@@ -56,6 +59,7 @@ TowerScene.prototype.enter = function (params) {
   this.banner = null
   this.toastMsg = ''
   this.toastUntil = 0
+  this._settled = false
   this.layout()
   this.buildButtons()
   try { analytics.track('td_start', { seed: this.seed }) } catch (e) {}
@@ -277,6 +281,7 @@ TowerScene.prototype.handleEvent = function (ev) {
   } else if (ev.type === 'hint') {
     this.showToast(d.text)
   } else if (ev.type === 'waveclear') {
+    try { analytics.track('td_wave', { wave: d.wave, hp: this.core.hp }) } catch (e) {}
     this.showBlessing(d)
   } else if (ev.type === 'gameover') {
     this.showResult(d)
@@ -296,7 +301,12 @@ TowerScene.prototype.showBlessing = function (d) {
     return {
       ick: meta.ick, title: meta.name, sub: meta.desc,
       tag: '选择', tagColor: '#6FE3D2',
-      onTap: function (m) { self.core.chooseBlessing(k); m.close(); self.modal = null }
+      onTap: function (m) {
+        self.core.chooseBlessing(k)
+        try { analytics.track('td_bless', { key: k, wave: d.wave }) } catch (e) {}
+        m.close()
+        self.modal = null
+      }
     }
   })
   this.modal = new Modal(this.sm, {
@@ -310,30 +320,49 @@ TowerScene.prototype.showBlessing = function (d) {
   })
 }
 TowerScene.prototype.showResult = function () {
+  // 幂等闸门：gameover 事件只应结算一次，避免重复写统计 / 重复发赛季 XP
+  if (this._settled) return
+  this._settled = true
   const c = this.core
   const reached = c.reached
   const prevBest = storage.getStats().bestTowerWave || 0
   const isBest = reached > prevBest
-  if (isBest) {
-    const s = storage.getStats()
-    s.bestTowerWave = reached
-    storage.saveStats(s)
-  }
-  const dust = Math.floor(reached / 2) * 3
-  if (dust > 0) storage.addDust(dust)
+
+  // ---- 波数结算（规格 14.5）：一局统一串联 统计 / 光尘 / 任务 / 赛季 / 成就 ----
+  const briefBefore = task.dailyBrief()
+  storage.recordTowerRun(reached)               // bestTowerWave / towerRuns / totalTowerWaves
+  const dust = mode.dustFor(reached)
+  if (dust > 0) storage.addDust(dust)         // addDust 内部推进 D1 / W2
+  task.onClear()                              // D2：当日完成守卫局数
+  task.onEndlessDepth(reached, true)          // W1：本周最高波数；赛季破纪录由本局 isBest 独立判重
+  const xp = mode.seasonXpFor(reached) + (isBest ? mode.WAVE_RULES.recordXp : 0)
+  season.addXp(xp)
+  const achIds = mode.achFor(reached)
+  let achNew = 0
+  for (let i = 0; i < achIds.length; i++) achNew += storage.unlockAch(achIds[i])
+  const taskDone = task.justCompleted(briefBefore, task.dailyBrief())
+
   try {
-    analytics.track('td_end', { reached: reached, wave: c.wave, kills: c.kills, towers: c.towers.length })
+    analytics.track('td_end', {
+      reached: reached, wave: c.wave, kills: c.kills, towers: c.towers.length,
+      dust: dust, xp: xp, isBest: isBest, achNew: achNew
+    })
   } catch (e) {}
+
   const self = this
+  const lines = [
+    { t: '守住了 ' + reached + ' 波 · 倒在第 ' + c.wave + ' 波', b: true },
+    { t: '' },
+    { t: '击杀 ' + c.kills + ' · 漏怪 ' + c.leaks + ' · 建塔 ' + c.towers.length + ' 座', s: 12, c: COL.sub },
+    { t: '光尘 +' + dust + ' · 赛季 XP +' + xp + (isBest ? ' · 新纪录！' : ''), s: 12, c: COL.gold },
+    { t: '本机最佳：' + Math.max(prevBest, reached) + ' 波', s: 12, c: COL.sub }
+  ]
+  if (achNew > 0) lines.push({ t: '🏅 解锁 ' + achNew + ' 项守卫成就', s: 12, c: COL.gold })
+  if (taskDone) lines.push({ t: '🎉 任务达成！', s: 12, c: '#6FE3D2' })
+
   this.modal = new Modal(this.sm, {
     title: '地宫失守',
-    lines: [
-      { t: '守住了 ' + reached + ' 波 · 倒在第 ' + c.wave + ' 波', b: true },
-      { t: '' },
-      { t: '击杀 ' + c.kills + ' · 漏怪 ' + c.leaks + ' · 建塔 ' + c.towers + ' 座', s: 12, c: COL.sub },
-      { t: '光尘 +' + dust + (isBest ? ' · 新纪录！' : ''), s: 12, c: COL.gold },
-      { t: '本机最佳：' + Math.max(prevBest, reached) + ' 波', s: 12, c: COL.sub }
-    ],
+    lines: lines,
     buttons: [
       { label: '再来一局', primary: true, onTap: function () { self.modal = null; self.enter({}) } },
       { label: '返回首页', onTap: function () { self.modal = null; self.sm.switch('home') } }

@@ -18,6 +18,7 @@ const ngplus = require(path.join(ROOT, 'core/ngplus.js'));
 const task = require(path.join(ROOT, 'core/task.js'));
 const GameScene = require(path.join(ROOT, 'scene/GameScene.js'));
 const HomeScene = require(path.join(ROOT, 'scene/HomeScene.js'));
+const mode = require(path.join(ROOT, 'core/mode.js'));
 
 let pass = 0, fail = 0;
 function T(name, cond) {
@@ -107,7 +108,10 @@ async function main() {
   T('光尘按周目倍率发放（>0）', storage.getDust() > dustBefore);
   T('结算无需报错且 overlay 构建', !!gs5.overlay || true); // buildOverlay 由场景层兜底
 
-  console.log('--- 7. HomeScene 轮回入口 ---');
+  console.log('--- 7. HomeScene 轮回入口（软切换回退到迷宫模式后验证旧行为） ---');
+  // 本段断言的是旧迷宫 CTA 文案/配色/分发；软切换默认已改为塔防，
+  // 因此显式回退再验证——同时这也是「回退能力」的一条回归覆盖。
+  mode.setMazeEnabled(true);
   // 先清进度测未全通态（resetProgress 同时清轮回存档）
   storage.resetProgress();
   const hs1 = new HomeScene(makeSM());
@@ -128,6 +132,8 @@ async function main() {
   hs3.enter();
   hs3.openNgPlus();
   T('周目进行中点击直接续跑', switched && switched.mode === 'level' && switched.level === 1);
+
+  mode.setMazeEnabled(false);
 
   console.log('--- 8. 重置进度覆盖轮回键 ---');
   storage.resetProgress();

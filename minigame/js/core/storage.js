@@ -197,7 +197,17 @@ function heroStats() {
     clears++;
     stars += (p.completed[lv] && p.completed[lv].stars) || 0;
   }
-  return { stars: stars, clears: clears };
+  // 塔防默认模式（v1.4 P1.5）：解锁源迁入波数口径（累计局数→通关数、累计波数→星数）。
+  // 取两条进度线的较大值，保证老玩家已解锁的皮肤/英雄不被回收——这是迁移兼容的底线。
+  const st = getStats();
+  const runs = st.towerRuns || 0;
+  const waves = st.totalTowerWaves || 0;
+  return {
+    stars: Math.max(stars, waves),
+    clears: Math.max(clears, runs),
+    towerRuns: runs,
+    totalTowerWaves: waves
+  };
 }
 
 // 手动解锁记录（广告 / 光尘路径）
@@ -653,7 +663,8 @@ function setSetting(k, v) {
 
 /* ============ 统计 ============ */
 const STAT_KEY = 'maze_stats_v1';
-const STAT_DEFAULT = { clears: 0, perfects: 0, bossClears: 0, noItemClears: 0, gemsTotal: 0, dustTotal: 0, dailyCount: 0, dailyStreak: 0, lastDaily: '', bestWave: 0, hunterWins: 0, bestFloor: 0 };
+// 塔防默认模式（v1.4 P1.5）：三项波数统计都挂在 STAT_KEY 下，随 resetProgress 一起清理
+const STAT_DEFAULT = { clears: 0, perfects: 0, bossClears: 0, noItemClears: 0, gemsTotal: 0, dustTotal: 0, dailyCount: 0, dailyStreak: 0, lastDaily: '', bestWave: 0, hunterWins: 0, bestFloor: 0, bestTowerWave: 0, towerRuns: 0, totalTowerWaves: 0 };
 function getStats() {
   try {
     const s = wx.getStorageSync(STAT_KEY);
@@ -665,6 +676,18 @@ function saveStats(s) {
   try {
     wx.setStorageSync(STAT_KEY, s);
   } catch (e) {}
+}
+
+// 塔防一局结算：统一维护三项波数统计（只写 stats，不发奖励；奖励编排在 TowerScene.showResult）
+// 传入 reached = 本局实际守住的波数；返回更新后的 stats 快照
+function recordTowerRun(reached) {
+  const w = Math.max(0, reached || 0);
+  const s = getStats();
+  s.towerRuns = (s.towerRuns || 0) + 1;
+  s.totalTowerWaves = (s.totalTowerWaves || 0) + w;
+  if (w > (s.bestTowerWave || 0)) s.bestTowerWave = w;
+  saveStats(s);
+  return s;
 }
 
 /* ============ 成就 ============ */
@@ -690,7 +713,11 @@ const ACHS = [
   { id: 'bow50', name: '魔弹大师', desc: '累计用魔弹击杀 50 个怪物', reward: 40 },
   // 图鉴收集里程碑（与 codex.checkMilestones 的碎片+称号同源，仅把「成就」钩子补齐，使其在成就面板可见）
   { id: 'cx_m', name: '博物学家', desc: '图鉴收录全部怪物', reward: 15 },
-  { id: 'cx_all', name: '地宫学者', desc: '图鉴全部收录', reward: 30 }
+  { id: 'cx_all', name: '地宫学者', desc: '图鉴全部收录', reward: 30 },
+  // 塔防默认模式成就（v1.4 P1.5）：三档对应首局正反馈 / P1 通过标准 / 当前难度瓶颈
+  { id: 'td5', name: '初守地宫', desc: '守住 5 波', reward: 15 },
+  { id: 'td10', name: '壁垒初成', desc: '守住 10 波', reward: 25 },
+  { id: 'td20', name: '不动如山', desc: '守住 20 波', reward: 40 }
 ];
 const ACH_KEY = 'maze_ach_v1';
 function getAch() {
@@ -1242,6 +1269,7 @@ module.exports = {
   incTaskTrack: incTaskTrack,
   getStats: getStats,
   saveStats: saveStats,
+  recordTowerRun: recordTowerRun,
   achList: achList,
   unlockAch: unlockAch,
   dailyKey: dailyKey,

@@ -40,6 +40,8 @@ function boot() {
   sm.register('home', new HomeScene(sm))
   sm.register('game', new GameScene(sm))
   sm.register('tower', new TowerScene(sm))
+  // v1.4 P1.5：首页仍作为 hub，但主 CTA 与所有玩法入口已指向塔防。
+  // 迷宫场景 game 保留注册，供 core/mode.js 的软切换回退使用（默认不可达）。
   sm.switch('home')
 
   // 触摸事件 → 当前场景（小游戏坐标即逻辑像素，无需换算）

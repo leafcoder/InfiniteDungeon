@@ -13,6 +13,7 @@ const weekly = require(path.join(ROOT, 'core/weekly.js'));
 const challenge = require(path.join(ROOT, 'core/challenge.js'));
 const Modals = require(path.join(ROOT, 'scene/Modals.js'));
 const HomeScene = require(path.join(ROOT, 'scene/HomeScene.js'));
+const mode = require(path.join(ROOT, 'core/mode.js'));
 
 let pass = 0, fail = 0;
 function T(name, cond) {
@@ -86,6 +87,9 @@ console.log('--- 反馈2：英雄行文案不超行卡 ---');
 }
 
 console.log('--- 反馈3：Hero 卡徽章（drawHero 各状态不抛错） ---');
+// 塔防默认模式下 Hero 卡文案已换成波数口径；本段验证的是 6 分区旧徽章，
+// 显式回退到迷宫模式，兼作软切换回退能力的回归覆盖。
+mode.setMazeEnabled(true);
 {
   // 解锁到 66 关：覆盖 zone0 已制霸 / zone1 进行中 / zone2 锁定 / 金章制霸态
   for (let i = 1; i <= 66; i++) storage.completeLevel(i, { time: 9, steps: 9, swipe: 0, stars: 1, gems: 0, gemTotal: 0 });
@@ -119,6 +123,7 @@ console.log('--- 反馈3：Hero 卡徽章（drawHero 各状态不抛错） ---')
     hs.drawHero(ctx, {});
   }
   T('6 个分区 drawHero 全部可绘制（含锁定/进行中/制霸态）', calls.badge > 0);
+  mode.setMazeEnabled(false);
 }
 
 console.log('--- 反馈4：挑战码词缀点选 ---');

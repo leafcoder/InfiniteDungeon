@@ -99,10 +99,12 @@ async function main() {
   hs.enter();
   T('词缀日显示异变横幅', !!hs.mutRect && !!hs.mut);
   T('横幅数据 mutationXp=20', hs.mut && season.mutationXp(hs.mut) === 20);
-  mutation.setOverride('');
+  // 显式固定为宁静日：按真实日期解析会随日期漂移（如 11-06 是迷雾日），使本断言偶发失败
+  mutation.setOverride('calm');
   const hs2 = new HomeScene(makeSM());
   hs2.enter();
   T('宁静日不显示异变横幅', hs2.mutRect === null || (hs2.mut && hs2.mut.bonus <= 1));
+  mutation.setOverride('');
 
   console.log('\n===== v28 异变日联动赛季XP: ' + pass + ' 通过 / ' + fail + ' 失败 =====');
   if (fail > 0) process.exit(1);

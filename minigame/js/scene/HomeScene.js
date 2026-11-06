@@ -30,8 +30,12 @@ const Background = require('../ui/Background')
 const { Button, roundRect } = require('../ui/Button')
 const { drawIcon } = require('../ui/Icons')
 const ScrollView = require('../ui/ScrollView')
+const mode = require('../core/mode')
 
 const UNLOCK_DUST_COST = 30   // 光尘直接解锁价格（与小程序版一致）
+
+// 塔防默认模式下 Hero 卡的虚拟「分区」：只替换数据源，不动 drawHero 的任何绘制代码
+const TOWER_HERO_ZONE = { key: 'tower', name: '地宫守卫', emoji: '🛡', start: 1, end: 20 }
 
 // 6 大分区（key/区间与小程序版同源；emoji 为 Hero 氛围图形）
 const ZONES = [
@@ -71,6 +75,8 @@ HomeScene.prototype.enter = function () {
   const W = this.sm.W
   const H = this.sm.H
   const self = this
+  // v1.4 P1.5 软切换：塔防为默认玩法；setMazeEnabled(true) 可完整回退到 120 关迷宫
+  this.towerMode = mode.isTowerDefault()
   const SAT = this.sm.sat || 0
   const SAB = this.sm.sab || 0
   const progress = storage.getProgress()
@@ -85,7 +91,10 @@ HomeScene.prototype.enter = function () {
   fx.to(this, { dustDisp: dust }, 800, { delay: 300, ease: 'easeOutCubic' })
   const zone = ZONES[0]
   const zoneDone = this.zoneDoneCount(0)
-  this.progT = zoneDone / 20
+  const twStat = storage.getStats()
+  this.towerBest = twStat.bestTowerWave || 0
+  this.towerRuns = twStat.towerRuns || 0
+  this.progT = this.towerMode ? Math.min(1, this.towerBest / 20) : zoneDone / 20
   // Hero 卡切换滑移（heroFrom: -1 左入 / 1 右入）
   this.heroT = 1
   this.heroFrom = 1
@@ -141,16 +150,20 @@ HomeScene.prototype.enter = function () {
   const ngGo = this.ng.unlocked
   this.goBtn = new Button({
     x: W / 2 - 120 * u, y: dockY - 66 * u, w: 240 * u, h: 54 * u,
-    label: ngGo ? '⟳ 轮回再临' : '▶ 继续冒险',
-    sub: ngGo
-      ? (this.ng.cycle > 0
-        ? ('第 ' + this.ng.cycle + ' 周目 · ' + this.ng.ngClear + '/120 · 光尘 ×' + this.ng.dustMul)
-        : '开启轮回 · 重跑 120 关 · 光尘 ×1.25 起')
-      : '第 ' + this.unlocked + ' 关 · ' + this.zoneOf(this.unlocked).name,
+    label: this.towerMode ? '▶ 开始守卫' : (ngGo ? '⟳ 轮回再临' : '▶ 继续冒险'),
+    sub: this.towerMode
+      ? ('最佳 ' + this.towerBest + ' 波 · 累计 ' + this.towerRuns + ' 局')
+      : (ngGo
+        ? (this.ng.cycle > 0
+          ? ('第 ' + this.ng.cycle + ' 周目 · ' + this.ng.ngClear + '/120 · 光尘 ×' + this.ng.dustMul)
+          : '开启轮回 · 重跑 120 关 · 光尘 ×1.25 起')
+        : '第 ' + this.unlocked + ' 关 · ' + this.zoneOf(this.unlocked).name),
     fontSize: Math.round(16 * u),
     fill: '#FFC15E', fill2: '#FF9F6E', textColor: 'rgba(10,12,32,0.92)',
     primary: true, radius: 27 * u,
-    onTap: ngGo ? function () { self.openNgPlus() } : function () { self.sm.switch('game', { level: self.unlocked }) }
+    onTap: this.towerMode
+      ? function () { self.openEntry('survival') }
+      : (ngGo ? function () { self.openNgPlus() } : function () { self._enterGame({ level: self.unlocked }) })
   })
   this.styleGoBtn()
   this.dock = []
@@ -168,6 +181,21 @@ HomeScene.prototype.enter = function () {
       pressT: 0
     })
   })
+  // 塔防默认模式：只保留补给 / 守卫 / 任务三项可见并重排居中。
+  // this.dock 仍保留全量 6 项（布局回归断言依赖），隐藏项只打 hidden 标记，不改数据结构。
+  if (this.towerMode) {
+    const vis = this.dock.filter(function (d) { return mode.TOWER_DOCK_KEYS.indexOf(d.key) >= 0 })
+    const n = vis.length
+    const vg = 10 * u
+    const vw = Math.min(88 * u, (W - padX * 2 - (n - 1) * vg) / n)
+    const startX = (W - (n * vw + (n - 1) * vg)) / 2
+    for (let i = 0; i < this.dock.length; i++) this.dock[i].hidden = true
+    vis.forEach(function (d, i) {
+      d.hidden = false
+      d.x = startX + i * (vw + vg)
+      d.w = vw
+    })
+  }
 
   // ---- Hero 卡（顶栏内容下方，取按钮行与光尘胶囊下沿较大值再留白） ----
   // Hero 卡：顶栏第二行（胶囊与图标钮同线）下沿再留白
@@ -189,7 +217,10 @@ HomeScene.prototype.enter = function () {
     : null
   if (this.mutRect) this.festBottom = this.mutRect.y + this.mutRect.h + 8 * u
   // 每日签到横幅：仅未签到时显示，可点；已签到后由顶栏「今日徽章」回看
-  this.chkRect = (!this.fest && !(this.mut && this.mut.mods.length > 0) && this.chk && !this.chk.signed)
+  const canShowChk = this.towerMode
+    ? (this.chk && !this.chk.signed)
+    : (!this.fest && !(this.mut && this.mut.mods.length > 0) && this.chk && !this.chk.signed)
+  this.chkRect = canShowChk
     ? { x: 16 * u, y: bannerY, w: W - 32 * u, h: 36 * u }
     : null
   if (this.chkRect) this.festBottom = this.chkRect.y + this.chkRect.h + 8 * u
@@ -226,6 +257,7 @@ HomeScene.prototype.enter = function () {
   try {
     wx.getClipboardData({
       success: function (res) {
+        if (self.towerMode) return // 挑战码依赖迷宫关卡，塔防默认模式下不再自动识别
         const dec = challenge.decode(res.data)
         if (!dec || !dec.level) return
         const code = String(res.data).trim().toUpperCase()
@@ -243,7 +275,7 @@ HomeScene.prototype.enter = function () {
           buttons: [
             { label: '接受挑战', primary: true, onTap: function () {
               self.modal = null
-              self.sm.switch('game', { mode: 'custom', level: dec.level, mods: dec.mods, seed: dec.seed, code: code })
+              self._enterGame({ mode: 'custom', level: dec.level, mods: dec.mods, seed: dec.seed, code: code })
             } },
             { label: '忽略' }
           ]
@@ -285,17 +317,28 @@ HomeScene.prototype.switchZone = function (idx, dir) {
 }
 
 // 入口分发
+// 软切换总闸：所有迷宫入口的 switch('game') 都收口到这里。
+// 塔防默认模式下玩家不可达迷宫；迷宫代码全部保留，setMazeEnabled(true) 即完整回退。
+HomeScene.prototype._enterGame = function (params) {
+  if (this.towerMode) {
+    this.sm.toast('迷宫玩法已下线，已为你进入地宫守卫')
+    this.sm.switch('tower')
+    return
+  }
+  this.sm.switch('game', params)
+}
+
 HomeScene.prototype.openEntry = function (key) {
   const self = this
   if (key === 'daily') {
     this.modal = Modals.showDaily(this.sm, function () {
       self.modal = null
-      self.sm.switch('game', { mode: 'daily', level: 30, seed: storage.dailySeed() })
+      self._enterGame({ mode: 'daily', level: 30, seed: storage.dailySeed() })
     }, function () { self.modal = null })
   } else if (key === 'weekly') {
     this.modal = Modals.showWeekly(this.sm, function (idx, p) {
       self.modal = null
-      self.sm.switch('game', { mode: 'weekly', weekIdx: idx, level: p.level, mods: p.mods, seed: weekly.weekSeed() + idx })
+      self._enterGame({ mode: 'weekly', weekIdx: idx, level: p.level, mods: p.mods, seed: weekly.weekSeed() + idx })
     }, function () { self.modal = null })
   } else if (key === 'ach') {
     // 图鉴升为主入口：收集系统独立直达，成就 / 伙伴 / 手记收进图鉴分组
@@ -313,7 +356,7 @@ HomeScene.prototype.openEntry = function (key) {
     }
     this.modal = Modals.showEndless(this.sm, function () {
       self.modal = null
-      self.sm.switch('game', { mode: 'endless', floor: 1 })
+      self._enterGame({ mode: 'endless', floor: 1 })
     }, function () { self.modal = null })
   } else if (key === 'survival') {
     // 槽位内核已升级为「地宫守卫」塔防（P1）：key 保持不变，避免打断 v34 布局断言
@@ -361,7 +404,7 @@ HomeScene.prototype.openFest = function () {
   const self = this
   this.modal = Modals.showFestival(this.sm, function (idx) {
     self.modal = null
-    self.sm.switch('game', { mode: 'festival', fest: self.fest, festIdx: idx })
+    self._enterGame({ mode: 'festival', fest: self.fest, festIdx: idx })
   }, function () { self.modal = null })
 }
 
@@ -554,7 +597,7 @@ HomeScene.prototype.openNgPlus = function () {
   const self = this
   const ng = ngplus.info()
   if (ng.cycle > 0 && !ng.cycleDone) {
-    this.sm.switch('game', { mode: 'level', level: 1 })
+    this._enterGame({ mode: 'level', level: 1 })
     return
   }
   this.modal = Modals.showNgPlus(this.sm, function () {
@@ -565,7 +608,7 @@ HomeScene.prototype.openNgPlus = function () {
       return g.kind === 'title' ? '称号「' + g.n + '」' : ('碎片 ×' + g.n)
     }).join(' · ')
     self.sm.toast('⟳ 第 ' + r.cycle + ' 轮回开启' + (name ? ' · ' + name : ''))
-    self.sm.switch('game', { mode: 'level', level: 1 })
+    self._enterGame({ mode: 'level', level: 1 })
   })
 }
 
@@ -589,6 +632,13 @@ HomeScene.prototype.zoneColor = function (zi) {
 // 语义锚定「继续冒险要进的分区」（unlocked 所在区），与按钮副标题文案一致
 HomeScene.prototype.styleGoBtn = function () {
   if (!this.goBtn) return
+  // 塔防默认模式：CTA 固定守卫金，不跟随已下线的分区色 / NG+ 轮回紫
+  if (this.towerMode) {
+    this.goBtn.fill = '#FFC15E'
+    this.goBtn.fill2 = '#FF9F6E'
+    this.goBtn.textColor = 'rgba(10,12,32,0.92)'
+    return
+  }
   // 轮回入口：固定轮回紫（与词缀 banner 同色系，语义区分主线 CTA）
   if (this.ng && this.ng.unlocked) {
     this.goBtn.fill = '#E36BFF'
@@ -628,6 +678,7 @@ HomeScene.prototype.onTouchStart = function (tx, ty) {
   this.goBtn.touch(tx, ty, true)
   for (let i = 0; i < this.dock.length; i++) {
     const d = this.dock[i]
+    if (d.hidden) continue
     if (tx >= d.x - 4 && tx <= d.x + d.w + 4 && ty >= d.y - 4 && ty <= d.y + d.h + 4) {
       fx.to(d, { pressT: 1 }, 70)
       this._dockDown = i
@@ -650,6 +701,7 @@ HomeScene.prototype.onTouchEnd = function (tx, ty) {
   // Dock：按下与松起落在同一项才触发
   for (let i = 0; i < this.dock.length; i++) {
     const d = this.dock[i]
+    if (d.hidden) continue
     fx.to(d, { pressT: 0 }, 170, { ease: 'easeOutBack' })
     if (this._dockDown === i &&
         tx >= d.x - 4 && tx <= d.x + d.w + 4 && ty >= d.y - 4 && ty <= d.y + d.h + 4) {
@@ -657,8 +709,8 @@ HomeScene.prototype.onTouchEnd = function (tx, ty) {
     }
   }
   this._dockDown = -1
-  // Hero 横滑切区
-  if (this.touchDown && this.inHero(tx, ty)) {
+  // Hero 横滑切区（塔防默认模式下 Hero 卡不切分区，跳过手势）
+  if (!this.towerMode && this.touchDown && this.inHero(tx, ty)) {
     const dx = tx - this.touchDown.x
     const dy = ty - this.touchDown.y
     if (Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy) * 1.4) {
@@ -670,10 +722,10 @@ HomeScene.prototype.onTouchEnd = function (tx, ty) {
   }
   if (this.gridSc.dragging) {
     this.gridSc.touchEnd()
-    if (this.isTap(tx, ty)) this.tapGrid(tx, ty)
+    if (!this.towerMode && this.isTap(tx, ty)) this.tapGrid(tx, ty)
   }
-  // 节日限时活动胶囊（N12）
-  if (this.touchDown && this.isTap(tx, ty) && this.inFestPill(tx, ty)) {
+  // 节日限时活动胶囊（N12）：塔防默认模式下该玩法已下线
+  if (!this.towerMode && this.touchDown && this.isTap(tx, ty) && this.inFestPill(tx, ty)) {
     this.openFest()
   }
   // 每日签到横幅（可点）
@@ -741,7 +793,7 @@ HomeScene.prototype.tapGrid = function (tx, ty) {
     return
   }
   fx.burst(tx, ty, { n: 12, colors: [this.zoneColor(this.activeZone), '#FFD86E'], speed: 110, size: 2.6 })
-  this.sm.switch('game', { level: lv })
+  this._enterGame({ level: lv })
 }
 
 // 解锁成功后的本地刷新（unlocked / CTA 副标题 / 网格重入场）
@@ -862,16 +914,65 @@ HomeScene.prototype.draw = function (ctx) {
   this.bg.draw(ctx, W, H, v, 1 / 60, 0)
   this.drawTopBar(ctx, v)
   this.drawHero(ctx, v)
-  this.drawFestBanner(ctx, v)
-  this.drawMutBanner(ctx, v)
-  this.drawChkBanner(ctx, v)
-  this.drawDots(ctx, v)
-  this.drawGrid(ctx, v)
+  if (this.towerMode) {
+    // 迷宫玩法下线：节日 / 异变 / 分区网格 / 圆点均不绘制。
+    // 签到横幅保留（签到是迁入项），原网格区域改由战绩卡填充，避免首页中部大片空白。
+    this.drawChkBanner(ctx, v)
+    this.drawTowerBoard(ctx, v)
+  } else {
+    this.drawFestBanner(ctx, v)
+    this.drawMutBanner(ctx, v)
+    this.drawChkBanner(ctx, v)
+    this.drawDots(ctx, v)
+    this.drawGrid(ctx, v)
+  }
   this.goBtn.draw(ctx)
   this.drawDock(ctx, v)
   if (this.modal) this.modal.draw(ctx)
   // Toast 必须画在弹窗之上：行卡购买等操作的反馈不能被弹窗盖住
   this.drawToast(ctx)
+  ctx.restore()
+}
+
+// 塔防默认模式的战绩卡：占据原关卡网格区域。
+// 只用 Canvas 最基础方法（无 createLinearGradient / measureText），保证无头测试桩可绘制。
+HomeScene.prototype.drawTowerBoard = function (ctx, v) {
+  const u = this.u
+  const g = this.gz
+  const e = this.ent(2)
+  if (e <= 0 || !g) return
+  const y = g.y
+  const h = Math.max(120 * u, Math.min(180 * u, this.goBtn.y - 20 * u - y))
+  ctx.save()
+  ctx.globalAlpha = e
+  roundRect(ctx, g.x, y, g.w, h, 18 * u)
+  ctx.fillStyle = 'rgba(255,255,255,0.10)'  // .glass：直接压在页面渐变底上的卡片
+  ctx.fill()
+  ctx.textAlign = 'left'
+  ctx.fillStyle = v['--text']
+  ctx.font = 'bold ' + Math.round(22 * u) + 'px sans-serif'   // --fs-title 档
+  ctx.fillText('地宫守卫 · 战绩', g.x + 20 * u, y + 30 * u)
+  ctx.fillStyle = v['--text-sub']
+  ctx.font = Math.round(11 * u) + 'px sans-serif'              // --fs-caption 档
+  ctx.fillText('在迷宫墙上建塔，守住地宫核心', g.x + 20 * u, y + 52 * u)
+  const st = storage.getStats()
+  const items = [
+    { n: st.bestTowerWave || 0, label: '最佳波数' },
+    { n: st.towerRuns || 0, label: '累计局数' },
+    { n: st.totalTowerWaves || 0, label: '累计波数' }
+  ]
+  const rowY = y + 96 * u
+  const colW = g.w / 3
+  for (let i = 0; i < items.length; i++) {
+    const cx = g.x + colW * i + colW / 2
+    ctx.textAlign = 'center'
+    ctx.fillStyle = '#FFC15E'
+    ctx.font = 'bold ' + Math.round(28 * u) + 'px sans-serif'  // --fs-numeric 档
+    ctx.fillText(String(items[i].n), cx, rowY)
+    ctx.fillStyle = v['--text-sub']
+    ctx.font = Math.round(11 * u) + 'px sans-serif'
+    ctx.fillText(items[i].label, cx, rowY + 24 * u)
+  }
   ctx.restore()
 }
 
@@ -943,9 +1044,9 @@ HomeScene.prototype.drawHero = function (ctx, v) {
   const e = this.ent(1)
   if (e <= 0) return
   const h = this.hero
-  const zone = ZONES[this.activeZone]
+  const zone = this.towerMode ? TOWER_HERO_ZONE : ZONES[this.activeZone]
   const zc = this.zoneColor(this.activeZone)
-  const locked = zone.start > this.unlocked
+  const locked = this.towerMode ? false : zone.start > this.unlocked
   ctx.save()
   ctx.globalAlpha = e
   ctx.translate(0, (1 - e) * 14)
@@ -1013,7 +1114,7 @@ HomeScene.prototype.drawHero = function (ctx, v) {
   ctx.fillText(zone.name, h.x + 22 * u, h.y + 30 * u)
   ctx.fillStyle = v['--text-sub']
   ctx.font = Math.round(11 * u) + 'px sans-serif'
-  ctx.fillText('第 ' + zone.start + ' – ' + zone.end + ' 关 · 20 个关卡', h.x + 22 * u, h.y + 48 * u)
+  ctx.fillText(this.towerMode ? '无尽波次 · 守住核心 · 波间三选一赐福' : ('第 ' + zone.start + ' – ' + zone.end + ' 关 · 20 个关卡'), h.x + 22 * u, h.y + 48 * u)
 
   // 进度条（内缩到左右箭头之间，避免遮挡）+ 计数
   const bx0 = h.x + 56 * u
@@ -1035,7 +1136,7 @@ HomeScene.prototype.drawHero = function (ctx, v) {
   ctx.fillStyle = v['--text-sub']
   ctx.font = Math.round(10.5 * u) + 'px sans-serif'
   ctx.textAlign = 'right'
-  ctx.fillText('已通关 ' + done + '/20', h.x + h.w - 56 * u, by + 18 * u)
+  ctx.fillText(this.towerMode ? ('累计 ' + this.towerRuns + ' 局') : ('已通关 ' + done + '/20'), h.x + h.w - 56 * u, by + 18 * u)
 
   // 怪物伙伴（N8）：结伴的怪物在卡上随行轻晃（纯展示）
   const partner = storage.getPartner()
@@ -1055,7 +1156,9 @@ HomeScene.prototype.drawHero = function (ctx, v) {
   ctx.textBaseline = 'middle'
   let badgeText
   const badgeFont = 'bold ' + Math.round(11.5 * u) + 'px sans-serif'
-  if (locked) {
+  if (this.towerMode) {
+    badgeText = this.towerBest > 0 ? ('🛡 最佳 ' + this.towerBest + ' 波') : '🛡 等待首局'
+  } else if (locked) {
     // 锁定：明确写出「需通关的最后一关」(zone.start-1)，而非用当前进度误导
     const need = Math.max(1, zone.start - 1)
     badgeText = '🔒 通关第 ' + need + ' 关解锁'
@@ -1307,6 +1410,7 @@ HomeScene.prototype.drawDock = function (ctx, v) {
   ctx.translate(0, (1 - e) * 14)
   for (let i = 0; i < this.dock.length; i++) {
     const d = this.dock[i]
+    if (d.hidden) continue
     const col = DOCK_ICON_COLOR[d.key] || '#FFFFFF'
     ctx.save()
     // 按压缩放（图标整体）
