@@ -2,7 +2,9 @@
  * 系统弹窗构建器（v1.4 单塔防 / 纯单机版）
  * 保留的面板：补给站、皮肤、设置、成就、赛季、图鉴（含旅人手记）、签到、首入引导。
  * 已随迷宫玩法删除：每日 / 周挑战 / 节日 / 无尽 / 轮回 / 挑战码 / 剪贴板口令。
- * 图鉴条目与旅人手记作为历史陈列保留，不新增塔防条目——否则老存档里程碑会永久失效。
+ * 补给站只保留塔防内真实生效的皮肤 / 英雄；天赋、道具强化、技能等迷宫机制
+ * 已无消费方，UI 一并下线（storage API 与老存档数据保留，不回收）。
+ * 图鉴主进度已迁到塔防条目；迷宫时代条目封存为只读档案区，不计入里程碑分母。
  */
 const storage = require('../core/storage')
 const theme = require('../core/theme')
@@ -16,10 +18,6 @@ const Modal = require('../ui/Modal')
 const AdSim = require('../ui/AdSim')
 const TaskPanel = require('../scene/TaskPanel')
 
-const UPG_FX = { cloak: '隐身衣', freeze: '冰冻星', dash: '加速鞋' } // 可升级道具（与 storage.getUpgrades 同源）
-// 强化道具 → 矢量图标映射（此前直接 ick: k，Icons.js 无 'freeze'/'dash'，图标空白）
-const UPG_ICON = { cloak: 'cloak', freeze: 'snow', dash: 'shoe' }
-
 function L(t, o) {
   const ln = { t: t }
   if (o) for (const k in o) ln[k] = o[k]
@@ -28,7 +26,6 @@ function L(t, o) {
 
 const SKIN_ICON = { classic: 'castle', glow: 'leaf', festival: 'lantern', cosmos: 'spark', abyss: 'wave', sakura: 'flower', dawn: 'spark' }
 const SKIN_COL = { classic: '#FFC15E', glow: '#6FE3D2', festival: '#FF7A92', cosmos: '#9B8CFF', abyss: '#40E0FF', sakura: '#FF9ECB', dawn: '#FFB46E' }
-const UPG_COL = { cloak: '#9B8CFF', freeze: '#6FE3D2', dash: '#FF9F6E' }
 
 // 皮肤行卡（补给站与独立皮肤弹窗共用，避免重复逻辑）
 // refresh(modal)：状态变化后的刷新回调——传入被点行所在弹窗时就地刷新（无闪烁），
@@ -440,107 +437,8 @@ function showSupply(sm, onClose) {
   const makeOpts = function () {
     const rows = []
 
-    rows.push({ header: '旅人之路 · 永久天赋' })
-    const tals = storage.getTalents()
-    for (const tk in storage.TALENT_META) {
-      ;(function (tk) {
-        const meta = storage.TALENT_META[tk]
-        const lv = tals[tk] || 0
-        const maxed = lv >= storage.TAL_MAX
-        rows.push({
-          ick: meta.icon,
-          icCol: meta.col,
-          title: meta.name + ' · Lv' + lv,
-          sub: meta.desc,
-          tag: maxed ? 'MAX' : storage.TAL_COST[lv] + '✦',
-          tagColor: maxed ? '#9AA0C8' : '#FFD86E',
-          dim: maxed,
-          onTap: function (m) {
-            if (maxed) { sm.toast('已满级'); return }
-            if (storage.buyTalent(tk)) sm.toast(meta.name + ' 升到 Lv' + (lv + 1) + '！')
-            else sm.toast('光尘不足')
-            apply(m)
-          }
-        })
-      })(tk)
-    }
-
-    rows.push({ header: '道具强化 · 永久生效' })
-    const ups = storage.getUpgrades()
-    for (const k in UPG_FX) {
-      ;(function (k) {
-        const lv = ups[k] || 0
-        const maxed = lv >= storage.UPG_COST.length
-        rows.push({
-          ick: UPG_ICON[k] || 'star',
-          icCol: UPG_COL[k] || '#FFC15E',
-          title: UPG_FX[k] + ' · Lv' + lv,
-          sub: maxed ? '已达最高等级' : '下一级延时 +' + storage.UPG_DELTA[k] + 's',
-          tag: maxed ? 'MAX' : storage.UPG_COST[lv] + '✦',
-          tagColor: maxed ? '#9AA0C8' : '#FFD86E',
-          dim: maxed,
-          onTap: function (m) {
-            if (maxed) { sm.toast('已满级'); return }
-            if (storage.buyUpgrade(k)) sm.toast('升级成功！')
-            else sm.toast('光尘不足')
-            apply(m)
-          }
-        })
-      })(k)
-    }
-
-    rows.push({ header: '技能' })
-    const sk = storage.getSkills()
-    const trialNow = storage.getTrial()
-    for (const key in storage.SKILL_META) {
-      ;(function (key) {
-        const meta = storage.SKILL_META[key]
-        rows.push({
-          ick: key === 'dash' ? 'bolt' : 'eye',
-          icCol: key === 'dash' ? '#FFD86E' : '#6FE3D2',
-          title: meta.name + (trialNow === key ? ' · 试用中' : ''),
-          sub: meta.desc + '（试用后不满意可再解锁）',
-          tag: sk[key] ? '已解锁' : (trialNow === key ? '试用已定' : '试用'),
-          tagColor: sk[key] ? '#6FE3D2' : '#FFD86E',
-          dim: !!sk[key],
-          onTap: function () {
-            if (sk[key]) { sm.toast('已解锁'); return }
-            // 未解锁（E4）：二级弹窗 —— 先免费试用 1 局，或直接花光尘解锁
-            sm.sceneModal(new Modal(sm, {
-              title: meta.name,
-              lines: [
-                { t: meta.desc, b: true, s: 13 },
-                { t: '' },
-                { t: '· 「免费试用」：下一局自动生效 1 次，用完即焚', s: 11.5, c: '#9AA0C8' },
-                { t: '· 试用满意后可再花 ' + storage.SKILL_COST[key] + '✦ 永久解锁', s: 11.5, c: '#9AA0C8' }
-              ],
-              buttons: [
-                {
-                  label: '免费试用 1 局', primary: true,
-                  onTap: function (m2) {
-                    storage.setTrial(key)
-                    sm.toast('下一局免费试用 ' + meta.name + ' ×1')
-                    m2.close()
-                    apply()
-                  }
-                },
-                {
-                  label: storage.SKILL_COST[key] + '✦ 解锁',
-                  onTap: function (m2) {
-                    if (storage.buySkill(key)) sm.toast('已解锁 ' + meta.name)
-                    else sm.toast('光尘不足')
-                    m2.close()
-                    apply()
-                  }
-                },
-                { label: '关闭' }
-              ]
-            }))
-          }
-        })
-      })(key)
-    }
-
+    // 迷宫时代的天赋 / 道具强化 / 技能在塔防内已无任何消费方，购买等于空耗光尘。
+    // 补给站只保留真实生效的外观收集（皮肤 / 英雄）；storage 侧 API 与老存档数据不删。
     rows.push({ header: '皮肤' })
     buildSkinRows(sm, apply).forEach(function (r) { rows.push(r) })
 
@@ -549,7 +447,7 @@ function showSupply(sm, onClose) {
 
     return {
       title: '补给站',
-      lines: [L('✦ 光尘 ' + storage.getDust() + ' · 通关/每日/广告获取（不可充值）', { c: '#FFC15E', b: true, s: 14 })],
+      lines: [L('✦ 光尘 ' + storage.getDust() + ' · 守卫结算 / 签到 / 广告获取（不可充值）', { c: '#FFC15E', b: true, s: 14 })],
       rows: rows,
       buttons: [{ label: '关闭' }],
       onClose: onClose
@@ -689,7 +587,8 @@ function showIntro(sm, onClose) {
   })
 }
 
-// 返回活动弹窗；无进行中活动时返回 null（HomeScene 据此隐藏入口）
+// 地宫图鉴（守卫篇）：塔防条目为主进度，迷宫时代条目作为只读档案区。
+// 里程碑分母冻结在塔防条目上（见 core/codex.js 迁移口径），老存档零回收。
 function showCodex(sm, onClose) {
   const prog = codex.progress(function () { return storage.getCodex() })
   const cx = storage.getCodex()
@@ -697,18 +596,19 @@ function showCodex(sm, onClose) {
   for (let g = 0; g < codex.GROUP_ORDER.length; g++) {
     const gk = codex.GROUP_ORDER[g]
     const gp = prog.byGroup[gk]
+    const archived = gk === 'archive'
     rows.push({ header: codex.GROUP_LABEL[gk] + ' ' + gp.got + '/' + gp.total })
     const list = codex.byGroup(gk)
-    for (let i = 0; i < list.length; i++) {
-      const e = list[i]
+    for (let i2 = 0; i2 < list.length; i2++) {
+      const e = list[i2]
       const n = cx[e.key] || 0
       if (n > 0) {
         rows.push({
-          ick: 'check',
+          ick: archived ? 'book' : 'check',
           icCol: e.color,
           title: e.glyph + ' ' + e.name,
-          sub: (e.use ? (e.desc + '｜用法：' + e.use) : e.desc),
-          tag: '×' + n,
+          sub: archived ? ('迷宫时代档案 · ' + e.desc) : e.desc,
+          tag: archived ? '已封存' : '×' + n,
           tagColor: e.color
         })
       } else {
@@ -716,8 +616,8 @@ function showCodex(sm, onClose) {
           ick: 'lock',
           icCol: '#9AA0C8',
           title: '？？？',
-          sub: '尚未遭遇 · 游玩对应关卡即可收录',
-          tag: '未收录',
+          sub: archived ? '迷宫时代档案 · 已封存，不再新增' : '守卫局内对应行为即可收录',
+          tag: archived ? '已封存' : '未收录',
           tagColor: '#9AA0C8',
           dim: true
         })
@@ -737,11 +637,11 @@ function showCodex(sm, onClose) {
       dim: !got
     }
   })
-  // 收集与成就：图鉴升为主入口后，把原先散在成就面板的 3 个低频系统收进同一分组
+  // 收集与成就：低频系统收进同一分组；伙伴（迷宫遭遇）换成真实生效的守卫战绩
   const achList = storage.achList()
   const achGot = achList.filter(function (a) { return a.unlocked; }).length
   const jr = storage.journalList().filter(function (j) { return j.unlocked; }).length
-  const partner = storage.getPartner()
+  const st = storage.getStats()
   const overview = [
     { header: '收集与成就' },
     {
@@ -754,22 +654,22 @@ function showCodex(sm, onClose) {
     {
       ick: 'book', icCol: '#9B8CFF',
       title: '旅人手记 ' + jr + '/12 段',
-      sub: '每分区首通与制霸各解锁一段',
+      sub: '迷宫时代档案 · 已封存，老存档篇章仍可阅读',
       tag: '阅读 ›', tagColor: '#9B8CFF',
       onTap: function () { sm.sceneModal(showJournal(sm, onClose)) }
     },
     {
-      ick: 'monster', icCol: '#FF7A92',
-      title: partner ? ('伙伴同行：' + partner.meta.emoji + ' ' + partner.meta.name) : '怪物伙伴 · 待结缘',
-      sub: partner ? partner.meta.desc : '与怪物照面累计次数达标即结伴',
-      tag: partner ? '同行中' : '未结缘',
-      tagColor: partner ? '#FFC15E' : '#9AA0C8'
+      ick: 'shield', icCol: '#6FE3D2',
+      title: '守卫战绩 · 最佳 ' + (st.bestTowerWave || 0) + ' 波',
+      sub: '累计 ' + (st.towerRuns || 0) + ' 局 / ' + (st.totalTowerWaves || 0) + ' 波',
+      tag: '本机', tagColor: '#6FE3D2'
     }
   ]
   return new Modal(sm, {
     title: '地宫图鉴',
     lines: [
-      L('收录 ' + prog.got + '/' + prog.total + ' · 与怪物照面、拾取道具、触发机关即自动收录', { b: true, c: '#7FD8FF', s: 13 })
+      L('守卫篇 ' + prog.got + '/' + prog.total + ' · 迷宫时代档案 ' + prog.archive.got + '/' + prog.archive.total + '（已封存）', { b: true, c: '#7FD8FF', s: 13 }),
+      L('建塔 / 击杀 / 选赐福 / 守住波次即自动收录', { s: 11, c: '#9AA0C8' })
     ],
     rows: overview.concat([{ header: '收集里程碑' }]).concat(msRows).concat(rows),
     buttons: [{ label: '关闭' }],
@@ -830,7 +730,7 @@ function showCheckin(sm, onClose) {
   })
 }
 
-/* ---------- 旅人手记（历史陈列，随图鉴保留） ---------- */
+/* ---------- 旅人手记（迷宫时代档案 · 已封存，随图鉴保留） ---------- */
 const JOURNAL_ZONES = ['入门森林', '迷雾峡谷', '流光回廊', '熔岩深渊', '星海之巅', '虚空回响']
 
 function showJournal(sm, onClose) {
@@ -847,7 +747,7 @@ function showJournal(sm, onClose) {
       ick: j.unlocked ? 'book' : 'lock',
       icCol: j.unlocked ? (isMaster ? '#FFC15E' : '#9B8CFF') : '#9AA0C8',
       title: j.unlocked ? j.title : '？？？',
-      sub: j.unlocked ? (isMaster ? '制霸后解锁的篇章 · 点开阅读' : '首次踏入的记录 · 点开阅读') : (isMaster ? '通关该分区全部 20 关解锁' : '踏入该分区任意一关解锁'),
+      sub: j.unlocked ? (isMaster ? '迷宫时代 · 制霸篇章 · 点开阅读' : '迷宫时代 · 首通篇章 · 点开阅读') : '迷宫时代档案 · 已封存',
       tag: j.unlocked ? '阅读 ›' : '🔒',
       tagColor: j.unlocked ? '#9B8CFF' : '#9AA0C8',
       dim: !j.unlocked,
@@ -858,7 +758,7 @@ function showJournal(sm, onClose) {
     title: '旅人手记',
     lines: [
       L('地宫为何沉没？火把从哪来？', { b: true, c: '#9B8CFF', s: 13 }),
-      L('每分区首通与制霸各解锁一段，共 12 段。', { s: 11, c: '#9AA0C8' })
+      L('迷宫时代档案 · 共 12 段，已封存不再新增；老存档已解锁的篇章仍可阅读。', { s: 11, c: '#9AA0C8' })
     ],
     rows: rows,
     buttons: [{ label: '关闭', onTap: null }],
@@ -870,7 +770,7 @@ function journalDetail(sm, j, back) {
   return new Modal(sm, {
     title: j.title,
     lines: [
-      L(JOURNAL_ZONES[j.zone] + ' · ' + (j.kind === 'master' ? '制霸' : '首通'), { s: 11, c: '#9B8CFF', ac: 'center' }),
+      L('迷宫时代档案 · ' + JOURNAL_ZONES[j.zone] + ' · ' + (j.kind === 'master' ? '制霸' : '首通'), { s: 11, c: '#9B8CFF', ac: 'center' }),
       { t: j.text, s: 12.5, c: '#F3F1FF', gap: true }
     ],
     buttons: [

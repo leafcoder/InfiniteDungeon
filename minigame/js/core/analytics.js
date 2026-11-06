@@ -13,6 +13,9 @@
  */
 const ANALYTICS_KEY = 'maze_analytics_v1'
 const MAX_BUFFER = 50
+// 单条 payload 的标量键上限。原为 8，td_end 增加到 10 个字段后
+// cxNew / achNew 会被静默截断；放大到 16 并在测试中做表驱动断言。
+const MAX_PAYLOAD_KEYS = 16
 
 // 业务事件白名单：新增事件先登记，防止拼写漂移。仅保留塔防与已迁入的外围系统事件。
 const TRACK_EVENTS = [
@@ -38,7 +41,7 @@ function sanitize(p) {
   if (!p || typeof p !== 'object') return out
   let n = 0
   for (const k in p) {
-    if (n >= 8) break
+    if (n >= MAX_PAYLOAD_KEYS) break
     const v = p[k]
     if (typeof v === 'number' && isFinite(v)) out[k] = v
     else if (typeof v === 'boolean') out[k] = v
@@ -82,7 +85,7 @@ function reset() {
 }
 
 module.exports = {
-  ANALYTICS_KEY: ANALYTICS_KEY, MAX_BUFFER: MAX_BUFFER, TRACK_EVENTS: TRACK_EVENTS,
+  ANALYTICS_KEY: ANALYTICS_KEY, MAX_BUFFER: MAX_BUFFER, MAX_PAYLOAD_KEYS: MAX_PAYLOAD_KEYS, TRACK_EVENTS: TRACK_EVENTS,
   track: track, setEnabled: setEnabled, isEnabled: isEnabled,
   summary: summary, clear: clear, reset: reset, loadBuffer: loadBuffer
 }

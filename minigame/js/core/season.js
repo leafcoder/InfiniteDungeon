@@ -1,13 +1,16 @@
 /**
  * 赛季征程（免费通行证，核心）
  * - 30 天一个赛季（锚点 2026-11-01），赛季内 XP 累积 → 等级 → 免费奖励轨
- * - XP 来源全部挂在已有事件上（零新埋点）：通关普通关 +20 / 每日挑战 +40 /
- *   无尽塔刷新最深纪录 +30 / 领取任意任务 +15 / 游戏圈打卡 +5
+ * - XP 数值统一由 mode.SEASON_XP 定义（单一事实来源），业务代码禁止另写魔法数字。
+ *   当前生效：守卫局结算（WAVE_RULES）/ 签到 +10 / 打卡 +5 / 任务领取 +15；
+ *   老存档兼容：completeLevel +20 / completeDaily +40 / onDepth +30（塔防不触发）。
+ * - 纯单机无埋点回流，数值仍为首版草案；真机数据回来后只改 mode 的两张表。
  * - 奖励只含软货币 / 免费券 / 限定外观，绝不发额外广告次数（合规红线）
  * - 限时稀缺：赛季结束 XP 与未领奖励重置（claimed 不跨赛季），制造回访截止感
  * - 存储 maze_season_v1；resetProgress 一并清理
  */
 const storage = require('./storage')
+const mode = require('./mode')
 
 const SEASON_KEY = 'maze_season_v1'
 const SEASON_LEN = 30      // 赛季天数
@@ -108,15 +111,9 @@ function onDepth(d) {
   const s = ensure()
   if (d <= (s.bestFloor || 0)) return info()
   s.bestFloor = d
-  s.xp = s.xp + 30
+  s.xp = s.xp + mode.SEASON_XP.depth
   save(s)
   return info()
-}
-
-// 异变日联动赛季 XP：词缀日（bonus>1）通关额外奖励，词缀越难给得越多（12/16/20），宁静日/非异变返回 0
-function mutationXp(mut) {
-  if (!mut || !(mut.bonus > 1)) return 0
-  return Math.round(20 * (mut.bonus - 1) / 0.5)
 }
 
 // ---- 领奖 ----
@@ -140,5 +137,5 @@ function claim(levelNo) {
 module.exports = {
   SEASON_KEY: SEASON_KEY, SEASON_LEN: SEASON_LEN, SEASON_LEVELS: SEASON_LEVELS, XP_PER_LEVEL: XP_PER_LEVEL,
   seasonOf: seasonOf, rewardFor: rewardFor,
-  ensure: ensure, info: info, addXp: addXp, onDepth: onDepth, claim: claim, mutationXp: mutationXp
+  ensure: ensure, info: info, addXp: addXp, onDepth: onDepth, claim: claim
 }

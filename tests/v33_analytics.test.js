@@ -49,7 +49,13 @@ console.log('--- 1. 缓冲 / 白名单 / 隐私过滤 ---');
   const p = analytics.loadBuffer()[1].p;
   T('payload 只保留标量', p.reached === 3 && p.ok === true && !('obj' in p) && !('fn' in p));
   T('长字符串截断到 32 字符', p.long.length === 32);
-  T('payload 键数上限 8', Object.keys(p).length <= 8);
+  T('payload 键数上限 = MAX_PAYLOAD_KEYS（16，避免 td_end 尾字段被静默截断）', (function () {
+    const many = {};
+    for (let i = 0; i < 20; i++) many['k' + i] = i;
+    analytics.track('td_wave', many);
+    const q = analytics.loadBuffer().filter(r => r.e === 'td_wave').pop().p;
+    return analytics.MAX_PAYLOAD_KEYS === 16 && Object.keys(q).length === 16;
+  })());
   for (let i = 0; i < 60; i++) analytics.track('checkin', { streak: i });
   T('缓冲封顶 50 条不膨胀', analytics.summary().buffered === 50);
   T('最旧记录被挤出（环形）', analytics.loadBuffer()[0].e !== 'td_start');

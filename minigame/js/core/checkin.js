@@ -8,6 +8,7 @@
  */
 const storage = require('./storage')
 const task = require('./task')
+const mode = require('./mode')
 
 const CHECK_KEY = 'maze_checkin_v1'
 
@@ -109,8 +110,8 @@ function sign() {
     }
   }
   if (msGot.length) save(s2)
-  // 赛季 XP：签到也是一次回访行为，给小额进度（懒加载避免静态环）
-  try { const sn = require('./season'); if (sn && sn.addXp) sn.addXp(10) } catch (e) {}
+  // 赛季 XP：签到也是一次回访行为，数值统一取 mode.SEASON_XP（懒加载避免静态环）
+  try { const sn = require('./season'); if (sn && sn.addXp) sn.addXp(mode.SEASON_XP.checkin) } catch (e) {}
   return { ok: true, got: got, msGot: msGot, streak: s.streak, total: s.total || 0 }
 }
 

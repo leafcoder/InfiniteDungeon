@@ -6,7 +6,8 @@
  * - core/mapgen.js 是塔防专用的通道图生成器，独立于已删除的 core/maze.js。
  *
  * WAVE_RULES 是波数结算口径的单一事实来源，与规格文档第 14.5 节一一对应。
- * 所有系数均为首版草案，需由本机埋点数据收敛，禁止在业务代码里另写魔法数字。
+ * SEASON_XP 是所有赛季 XP 常量的单一事实来源；业务代码禁止另写魔法数字。
+ * 纯单机没有埋点回流，两套数值仍为首版草案；真机数据回来后只改这两张表。
  */
 
 const WAVE_RULES = {
@@ -17,6 +18,18 @@ const WAVE_RULES = {
   recordXp: 30,            // 破本机最佳波数时的额外 XP（由 TowerScene 的 isBest 判重，不复用 bestFloor）
   achWaves: [5, 10, 20],   // 塔防成就阈值：首局正反馈 / P1 通过标准 / 当前难度瓶颈
   achIds: ['td5', 'td10', 'td20']
+}
+
+// 赛季 XP 数值口径（唯一事实来源）。
+// clearLegacy / dailyLegacy 仅供老存档兼容路径（塔防不触发）；depth 与破纪录 XP 同源，
+// 避免 season.onDepth 与 WAVE_RULES.recordXp 各写一个 30。
+const SEASON_XP = {
+  clearLegacy: 20,             // 老存档：completeLevel
+  dailyLegacy: 40,             // 老存档：completeDaily
+  checkin: 10,                 // 每日签到（当前生效）
+  club: 5,                     // 游戏圈打卡（当前生效）
+  taskClaim: 15,               // 领取任务奖励（当前生效）
+  depth: WAVE_RULES.recordXp   // 破纪录：与波数结算同源
 }
 
 // 首页 DOCK 保留的可见项（布局结构仍保留 6 项，其余按 hidden 过滤不绘制、不命中）
@@ -45,6 +58,7 @@ function achFor(reached) {
 
 module.exports = {
   WAVE_RULES: WAVE_RULES,
+  SEASON_XP: SEASON_XP,
   TOWER_DOCK_KEYS: TOWER_DOCK_KEYS,
   seasonXpFor: seasonXpFor,
   dustFor: dustFor,

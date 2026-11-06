@@ -1,6 +1,7 @@
 // 本地进度存储（单机，无需后端）
 // 埋点上报层：单向依赖（analytics 不 require storage），无后端时仅写本地缓冲
 const analytics = require('./analytics');
+const mode = require('./mode');
 const KEY = 'maze_progress_v1';
 const TUT_KEY = 'maze_tutorial_v1';
 const THEME_KEY = 'maze_theme_v1';
@@ -169,20 +170,22 @@ const HEROES = [
   }
 ];
 
-// 英雄微特性（N5）：每款 1 条轻特性，强化收集意义；数值刻意压低不卖数值
+// 英雄微特性：收藏风味文案（塔防内英雄只换造型，不提供任何数值加成）。
+// 迷宫时代的 explore / fxDur / gem / view / invuln / bossStep / daily 等数值字段
+// 在塔防里没有任何消费方，已全部清理，避免「写了加成却从不生效」的假特性。
 const HERO_TRAITS = {
-  rover:   { name: '旅人直觉', desc: '老练的探路者', explore: 3 },
-  mint:    { name: '薄荷清爽', desc: '步履轻快如风', fxDur: 1.10 },
-  sunset:  { name: '霞光馈赠', desc: '霞光偏爱守夜人', gem: 1.05 },
-  abyssal: { name: '渊视', desc: '深渊里也看得清', view: 1.08 },
-  sakura:  { name: '樱盾', desc: '落樱护住第一波', invuln: 2000 },
-  lava:    { name: '熔核余温', desc: '熔核不惧层主', bossStep: 0.95 },
-  royal:   { name: '贵胄礼遇', desc: '星海赐福予贵胄', daily: 1.10 },
-  mage:    { name: '秘纹回响', desc: '秘纹在塔上流转', fxDur: 1.15 },
-  samurai: { name: '居合残心', desc: '居合只斩来敌', bossStep: 0.90 },
-  knight:  { name: '铁壁誓约', desc: '铁壁之誓不退', fxDur: 1.20 },
-  rogue:   { name: '暗影轻盈', desc: '暗影中自有眼', view: 1.06 },
-  archer:  { name: '鹰眼', desc: '鹰眼锁定长路', view: 1.12 }
+  rover:   { name: '旅人直觉', desc: '老练的探路者' },
+  mint:    { name: '薄荷清爽', desc: '步履轻快如风' },
+  sunset:  { name: '霞光馈赠', desc: '霞光偏爱守夜人' },
+  abyssal: { name: '渊视', desc: '深渊里也看得清' },
+  sakura:  { name: '樱盾', desc: '落樱护住第一波' },
+  lava:    { name: '熔核余温', desc: '熔核不惧层主' },
+  royal:   { name: '贵胄礼遇', desc: '星海赐福予贵胄' },
+  mage:    { name: '秘纹回响', desc: '秘纹在塔上流转' },
+  samurai: { name: '居合残心', desc: '居合只斩来敌' },
+  knight:  { name: '铁壁誓约', desc: '铁壁之誓不退' },
+  rogue:   { name: '暗影轻盈', desc: '暗影中自有眼' },
+  archer:  { name: '鹰眼', desc: '鹰眼锁定长路' }
 };
 function getHeroTrait() {
   return HERO_TRAITS[getHero()] || null;
@@ -327,27 +330,25 @@ function buyUpgrade(k) {
   return true;
 }
 
-// 道具实际生效时长（秒）：基础 + 等级增量，再乘「磐石」天赋加成
+// 道具实际生效时长（秒）：迷宫时代兼容 API，塔防不调用
 function fxDuration(k) {
   const u = getUpgrades();
   const base = UPG_BASE[k] + (UPG_DELTA[k] || 0) * (u[k] || 0);
-  const tr = HERO_TRAITS[getHero()];
-  const heroMul = tr && tr.fxDur ? tr.fxDur : 1;
-  return Math.round(base * (1 + 0.04 * (getTalents().guard || 0)) * heroMul * 100) / 100;
+  // 英雄特性数值字段已清理，此处只保留天赋加成（兼容 API，塔防不调用）
+  return Math.round(base * (1 + 0.04 * (getTalents().guard || 0)) * 100) / 100;
 }
 
-// ---------------- 旅人之路（N7 局外天赋树） ----------------
-// 三条支线各 5 级，光尘购买、永久生效；满树只改手感、不破坏关卡难度标定。
-// 拾光：火把光照半径 +4%/级、光尘结算 +2%/级
-// 磐石：道具效果时长 +4%/级（fxDuration 内乘算）
-// 疾风：移动步频 -3%/级（PlayCore.stepMul）
+// ---------------- 旅人之路（迷宫时代存档兼容，塔防不生效） ----------------
+// 天赋数据 / API 完整保留，保证老存档不回收；但迷宫玩法删除后这三条效果
+// 在塔防里没有任何消费方，补给站已不再提供购买入口。
+// 下方 fxDuration / gemValueMul / viewMul / stepMul 同为老存档兼容 API。
 const TAL_KEY = 'maze_talent_v1';
 const TAL_COST = [20, 35, 55, 80, 120];             // Lv0→1 … 4→5
 const TAL_MAX = TAL_COST.length;
 const TALENT_META = {
-  gather: { name: '拾光', icon: 'star', col: '#FFD86E', desc: '火把光照 +4% · 光尘结算 +2%（每级）' },
-  guard: { name: '磐石', icon: 'shield', col: '#6FE3D2', desc: '道具效果时长 +4%（每级）' },
-  swift: { name: '疾风', icon: 'bolt', col: '#FF9AB8', desc: '移动步频 -3%，转身更跟手（每级）' }
+  gather: { name: '拾光', icon: 'star', col: '#FFD86E', desc: '迷宫时代 · 已封存' },
+  guard: { name: '磐石', icon: 'shield', col: '#6FE3D2', desc: '迷宫时代 · 已封存' },
+  swift: { name: '疾风', icon: 'bolt', col: '#FF9AB8', desc: '迷宫时代 · 已封存' }
 };
 
 function getTalents() {
@@ -373,17 +374,16 @@ function buyTalent(k) {
   return true;
 }
 
-// 拾光：光尘结算倍率（落霞行者特性再 +5%）
+// 光尘结算倍率：迷宫时代兼容 API，塔防不调用
 function gemValueMul() {
-  const tr = HERO_TRAITS[getHero()];
-  const heroMul = tr && tr.gem ? tr.gem : 1;
-  return (1 + 0.02 * (getTalents().gather || 0)) * heroMul;
+  // 英雄特性数值字段已清理，此处只保留天赋加成（兼容 API，塔防不调用）
+  return 1 + 0.02 * (getTalents().gather || 0);
 }
-// 拾光：迷雾视野倍率（PlayCore.revealAround 乘算）
+// 迷雾视野倍率：迷宫时代兼容 API，塔防不调用
 function viewMul() {
   return 1 + 0.04 * (getTalents().gather || 0);
 }
-// 疾风：步频倍率（越小越快）
+// 步频倍率：迷宫时代兼容 API，塔防不调用
 function stepMul() {
   return 1 - 0.03 * (getTalents().swift || 0);
 }
@@ -496,7 +496,7 @@ function completeLevel(level, rec) {
   const tm = taskMod();
   if (tm && tm.onClear) { try { tm.onClear() } catch (e) {} }
   const sm2 = seasonMod();
-  if (sm2 && sm2.addXp) { try { sm2.addXp(20) } catch (e) {} }
+  if (sm2 && sm2.addXp) { try { sm2.addXp(mode.SEASON_XP.clearLegacy) } catch (e) {} }
   return { progress: p, isNew: better };
 }
 
@@ -712,8 +712,8 @@ const ACHS = [
   { id: 'bow10', name: '弹无虚发', desc: '累计用魔弹击杀 10 个怪物', reward: 20 },
   { id: 'bow50', name: '魔弹大师', desc: '累计用魔弹击杀 50 个怪物', reward: 40 },
   // 图鉴收集里程碑（与 codex.checkMilestones 的碎片+称号同源，仅把「成就」钩子补齐，使其在成就面板可见）
-  { id: 'cx_m', name: '博物学家', desc: '图鉴收录全部怪物', reward: 15 },
-  { id: 'cx_all', name: '地宫学者', desc: '图鉴全部收录', reward: 30 },
+  { id: 'cx_m', name: '博物学家', desc: '收录图鉴全部来袭者', reward: 15 },
+  { id: 'cx_all', name: '地宫学者', desc: '收录守卫篇全部条目', reward: 30 },
   // 塔防默认模式成就（v1.4 P1.5）：三档对应首局正反馈 / P1 通过标准 / 当前难度瓶颈
   { id: 'td5', name: '初守地宫', desc: '守住 5 波', reward: 15 },
   { id: 'td10', name: '壁垒初成', desc: '守住 10 波', reward: 25 },
@@ -814,7 +814,7 @@ function completeDaily(date, rec) {
   const tm = taskMod();
   if (tm && tm.onClear) { try { tm.onClear() } catch (e) {} }
   const sm3 = seasonMod();
-  if (sm3 && sm3.addXp) { try { sm3.addXp(40) } catch (e) {} }
+  if (sm3 && sm3.addXp) { try { sm3.addXp(mode.SEASON_XP.dailyLegacy) } catch (e) {} }
   return { better: better, streak: streak, bonus: bonus, newAch: newAch };
 }
 

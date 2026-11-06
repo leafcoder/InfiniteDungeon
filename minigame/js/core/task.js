@@ -7,6 +7,7 @@
  * - 合规红线：奖励绝不发"额外广告次数"突破微信每日 ≤3 次（见 storage.ad.freqState）
  */
 const storage = require('./storage')
+const mode = require('./mode')
 
 const TASK_KEY = 'maze_task_v1'
 
@@ -247,16 +248,16 @@ function onGameClubTap() {
   const s = ensure()
   addProgress(s.daily, 'D3', 1)
   save(s)
-  // 赛季 XP：打卡也是一次回访行为，给小额进度（懒加载避免 season→task 静态环）
-  try { const sn = require('./season'); if (sn && sn.addXp) sn.addXp(5) } catch (e) {}
+  // 赛季 XP：打卡也是一次回访行为，数值统一取 mode.SEASON_XP（懒加载避免 season→task 静态环）
+  try { const sn = require('./season'); if (sn && sn.addXp) sn.addXp(mode.SEASON_XP.club) } catch (e) {}
 }
 function onEndlessDepth(d, skipSeason) {
   if (!d || d <= 0) return
   const s = ensure()
   const w1 = s.weekly.filter(function (x) { return x.id === 'W1' })[0]
   if (w1 && !w1.claimed && d > w1.progress) { w1.progress = d; save(s) }
-  // 赛季 XP：迷宫无尽塔仍由 season.onDepth 按最深层判重。
-  // 塔防默认模式传 skipSeason=true：破纪录改由 TowerScene 用本机最佳波数判重发放，
+  // 赛季 XP：老存档的无尽塔深度仍由 season.onDepth 判重（XP 取 mode.SEASON_XP.depth）。
+  // 塔防传 skipSeason=true：破纪录改由 TowerScene 用本机最佳波数判重发放，
   // 避免复用 bestFloor 导致老存档的深度污染塔防波数奖励。
   if (skipSeason) return
   try { const sn = require('./season'); if (sn && sn.onDepth) sn.onDepth(d) } catch (e) {}
@@ -318,8 +319,8 @@ function claim(id) {
   t.claimed = true
   save(s)
   storage.incTaskTrack('claim')
-  // 赛季 XP：领取任意任务奖励都给赛季进度（懒加载）
-  try { const sn = require('./season'); if (sn && sn.addXp) sn.addXp(15) } catch (e) {}
+  // 赛季 XP：领取任意任务奖励都给赛季进度，数值统一取 mode.SEASON_XP（懒加载）
+  try { const sn = require('./season'); if (sn && sn.addXp) sn.addXp(mode.SEASON_XP.taskClaim) } catch (e) {}
   const got = applyReward(def.reward)
   // 全勤判定（领取后）
   const st = getState()

@@ -1,9 +1,10 @@
 /**
- * 地宫守卫 · 塔防场景（P1 原型）
- * - 独立场景，不改动 GameScene：主线 120 关与 34 个既有测试零影响，回退只需删本文件
+ * 地宫守卫 · 塔防场景（v1.4 唯一玩法）
+ * - 迷宫玩法层已物理删除，本场景是唯一对局入口，不提供回退。
  * - 交互采用「吸附式三态」：选塔 → 点地图吸附最近合法墙格 → 确认条建造
  *   （29×43 栅格单格约 13px，远小于 88rpx 触摸规范，精确点格在真机不可用）
- * - 波间赐福与结算复用 Modal；成绩写 stats.bestTowerWave（stats 键整体被 resetProgress 清理）
+ * - 波间赐福与结算复用 Modal；成绩写 stats.bestTowerWave（随 resetProgress 清理）
+ * - 局内事件同时推进 codex 图鉴收录；首次遭遇才写存储，避免 kill 等高频事件重复 IO
  */
 const TowerCore = require('../core/tower')
 const TOWER_DEFS = TowerCore.TOWER_DEFS
@@ -16,6 +17,7 @@ const analytics = require('../core/analytics')
 const mode = require('../core/mode')
 const task = require('../core/task')
 const season = require('../core/season')
+const codex = require('../core/codex')
 const Modal = require('../ui/Modal')
 const { Button } = require('../ui/Button')
 
@@ -61,6 +63,7 @@ TowerScene.prototype.enter = function (params) {
   this.toastMsg = ''
   this.toastUntil = 0
   this._settled = false
+  this._codexSeen = {}
   this.layout()
   this.buildButtons()
   try { analytics.track('td_start', { seed: this.seed }) } catch (e) {}
@@ -276,6 +279,14 @@ TowerScene.prototype.update = function (dt) {
 }
 TowerScene.prototype.handleEvent = function (ev) {
   const d = ev.data || {}
+  // 图鉴收录：事件驱动、同 key 每局只写一次存储
+  if (!this._codexSeen) this._codexSeen = {}
+  const cxKeys = codex.keysForEvent(ev)
+  for (let k = 0; k < cxKeys.length; k++) {
+    if (this._codexSeen[cxKeys[k]]) continue
+    this._codexSeen[cxKeys[k]] = 1
+    try { storage.encounterCodex(cxKeys[k]) } catch (e) {}
+  }
   if (ev.type === 'wave') {
     this.banner = { text: '第 ' + d.wave + ' 波来袭', until: Date.now() + 1400, color: COL.danger }
     this.buildButtons()
@@ -360,11 +371,15 @@ TowerScene.prototype.showResult = function () {
   let achNew = 0
   for (let i = 0; i < achIds.length; i++) achNew += storage.unlockAch(achIds[i])
   const taskDone = task.justCompleted(briefBefore, task.dailyBrief())
+  // 图鉴里程碑在结算时统一检查（flags 防重，老存档已解锁的不回收、不重发）
+  let cxNew = []
+  try { cxNew = codex.checkMilestones(storage) } catch (e) {}
 
   try {
     analytics.track('td_end', {
       reached: reached, wave: c.wave, kills: c.kills, towers: c.towers.length,
-      forge: c.forgeLv, dust: dust, xp: xp, isBest: isBest, achNew: achNew
+      forge: c.forgeLv, dust: dust, xp: xp, isBest: isBest, achNew: achNew,
+      cxNew: cxNew.length
     })
   } catch (e) {}
 
@@ -378,6 +393,7 @@ TowerScene.prototype.showResult = function () {
   ]
   if (c.forgeLv > 0) lines.push({ t: '⚒ 锻造 ' + c.forgeLv + ' 级 · 最终伤害 ×' + c.damageMul().toFixed(2), s: 12, c: COL.gold })
   if (achNew > 0) lines.push({ t: '🏅 解锁 ' + achNew + ' 项守卫成就', s: 12, c: COL.gold })
+  if (cxNew.length > 0) lines.push({ t: '📖 图鉴里程碑达成 ' + cxNew.length + ' 项', s: 12, c: COL.gold })
   if (taskDone) lines.push({ t: '🎉 任务达成！', s: 12, c: '#6FE3D2' })
 
   this.modal = new Modal(this.sm, {

@@ -24,7 +24,6 @@ const fx = require('../ui/fx')
 const Background = require('../ui/Background')
 const { Button, roundRect } = require('../ui/Button')
 const { drawIcon } = require('../ui/Icons')
-const ScrollView = require('../ui/ScrollView')
 const mode = require('../core/mode')
 
 // 塔防默认模式下 Hero 卡的虚拟「分区」：只替换数据源，不动 drawHero 的任何绘制代码
@@ -194,7 +193,6 @@ HomeScene.prototype.enter = function () {
     ? { x: 16 * u, y: bannerY, w: W - 32 * u, h: 36 * u }
     : null
   if (this.chkRect) this.festBottom = this.chkRect.y + this.chkRect.h + 8 * u
-  this.heroSc = new ScrollView({ x: this.hero.x, y: this.hero.y, w: this.hero.w, h: this.hero.h, horizontal: true })
   // 分区切换：左右滑动 + 圆点指示器（反馈：两侧箭头与手势重复且挤占空间，已移除）
 
   // ---- 关卡节点图（5 列紧凑节点，紧贴圆点下方，高度自适应到 CTA 上沿） ----
@@ -203,9 +201,6 @@ HomeScene.prototype.enter = function () {
   this.gap = 8 * u
   this.cw = (this.gz.w - (this.cols - 1) * this.gap) / this.cols
   this.chh = 58 * u
-  const rows = Math.ceil(20 / this.cols)
-  this.gridSc = new ScrollView({ x: this.gz.x, y: this.gz.y, w: this.gz.w, h: this.goBtn.y - 12 * u - this.gz.y })
-  this.gridSc.setContent(rows * this.chh + (rows - 1) * this.gap)
   this.gridAnim = 1
 
   // 今日任务摘要：进页时缓存一次，避免 drawDock 每帧同步读存储；任务面板关闭时刷新
@@ -492,9 +487,9 @@ HomeScene.prototype.update = function (dt) {
   // CTA 配色与进度/皮肤联动（换肤或进度变化后的下一帧自动对齐）
   const goKey = this.unlocked + ':' + storage.getTheme()
   if (goKey !== this._goKey) { this._goKey = goKey; this.styleGoBtn() }
-  const scrolling = this.gridSc.update(dt)
+  // 关卡网格滚动实例已随迷宫玩法移除；此处只保留 toast 期间的持续重绘
   const toasting = Date.now() < this.toastUntil + 300
-  if (scrolling || toasting) this.dirty = true
+  if (toasting) this.dirty = true
 }
 
 /* ---------- 绘制 ---------- */
